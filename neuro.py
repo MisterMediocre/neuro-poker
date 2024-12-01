@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pickle
 import random
 import time
+import os
 from pathlib import Path
 from typing import Final, Optional, Tuple
 
@@ -18,6 +19,8 @@ from simulation import evaluate_fitness
 from simulation import NUM_PLAYERS, SMALL_BLIND_AMOUNT, BIG_BLIND_AMOUNT, STACK
 
 DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
+DEFAULT_NUM_GENERATIONS: Final[int] = 50
+DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 
 
 @dataclass
@@ -88,15 +91,18 @@ def eval_genomes(genomes, config):
 
 def run_neat(
     evolution: Optional[NEATEvolution] = None, 
-    n: int = 50
+    num_generations: int = 50,
+    num_cores: int = 1,
 ) -> NEATEvolution:
     """Run NEAT neuroevolution to evolve poker players.
     
     Parameters:
         evolution: NEATEvolution | None
             The initial evolution to evolve from, if any.
-        n: int
+        num_generations: int
             The number of generations to run.
+        num_cores: int
+            The number of cores to use in parallel.
 
     Returns:
         evolution: NEATEvolution
@@ -104,11 +110,18 @@ def run_neat(
     """
     # Load configuration
     config_path = "config-feedforward.txt"
-    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                         neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+    config = neat.Config(
+        neat.DefaultGenome, 
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet, 
+        neat.DefaultStagnation, 
+        config_path
+    )
 
     # Get or create population
-    population: neat.Population = evolution.population if evolution is not None else neat.Population(config)
+    population: neat.Population = (
+        evolution.population if evolution is not None else neat.Population(config)
+    )
 
 
     # Add reporters
@@ -117,12 +130,14 @@ def run_neat(
     population.add_reporter(stats)
 
     # Run NEAT
-    evaluator = neat.parallel.ParallelEvaluator(4, evaluate_genome)
+    evaluator = neat.parallel.ParallelEvaluator(num_cores, evaluate_genome)
 
     # winner = population.run(eval_genomes, n=50)
     # TODO: Fix type warning
-    winner: Final[neat.DefaultGenome] = population.run(evaluator.evaluate, n=n)  # type: ignore
-
+    winner: Final[neat.DefaultGenome] = population.run(  # type: ignore
+        evaluator.evaluate, 
+        n=num_generations
+    )
 
     # print("Best genome:", winner)
     return NEATEvolution(population, stats, winner)
@@ -143,6 +158,18 @@ def get_args():
         default=DEFAULT_EVOLUTION_FILE, 
         help="File to read/save the evolution to/from."
     )
+    parser.add_argument(
+        "-g", "--num-generations",
+        type=int,
+        default=DEFAULT_NUM_GENERATIONS,
+        help="Number of generations to run."
+    )
+    parser.add_argument(
+        "-c", "--num-cores",
+        type=int,
+        default=DEFAULT_NUM_CORES,
+        help="Number of cores to use for evaluation."
+    )
 
     return parser.parse_args()
 
@@ -153,10 +180,11 @@ def main():
     # Read args
     args: Final[argparse.Namespace] = get_args()
     evolution_file: Final[Path] = args.evolution_file
+    num_cores: Final[int] = args.num_cores
+    num_generations: Final[int] = args.num_generations
 
     # Initialize variables
     evolution: Optional[NEATEvolution] = None  # Evolved population
-    n: int = 1  # Generation to run until
 
     # Load previous evolution, if it exists
     if evolution_file.exists():
@@ -168,14 +196,14 @@ def main():
                 raise ValueError(f"Invalid evolution file: {evolution_file}")
 
             print(f"Loaded evolution at {evolution_file}")
-            print(f"Running until generation {n + evolution.population.generation}...")
+            print(f"Running until generation {num_generations + evolution.population.generation}...")
     else:
         # Start from scratch
         print("Starting new evolution")
-        print(f"Running until generation {n}...")
+        print(f"Running until generation {num_generations}...")
 
     # Run NEAT
-    evolution = run_neat(evolution, n)
+    evolution = run_neat(evolution, num_generations, num_cores)
 
     # Save model
     with evolution_file.open("wb") as ef:
