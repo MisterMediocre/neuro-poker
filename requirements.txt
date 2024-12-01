@@ -1,0 +1,3 @@
+pypokerengine
+neat-python
+numpy
