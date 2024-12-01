@@ -9,6 +9,7 @@ In particular, we're interested in modelling collusion between agents.
 ## Installation
 Tested on Python 3.12.7
 ```bash
+python3 -m venv env
 source env/bin/activate
 pip install -r requirements.txt
 ```
