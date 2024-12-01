@@ -1,25 +1,27 @@
 """Classes and functions for poker players.
 """
 
-from typing import Tuple
 import random
+from typing import Tuple
 
 import numpy as np
+from pypokerengine.players import BasePokerPlayer
 
 from neuropoker.game import extract_features
 
-from pypokerengine.players import BasePokerPlayer
 
 class RandomPlayer(BasePokerPlayer):
-    """A player which takes random actions.
-    """
+    """A player which takes random actions."""
+
     def declare_action(self, valid_actions, hole_card, round_state):
         action = random.choice(valid_actions)
 
-        if action['action'] == 'raise':
-            return action['action'], random.randint(action['amount']['min'], action['amount']['max'])
+        if action["action"] == "raise":
+            return action["action"], random.randint(
+                action["amount"]["min"], action["amount"]["max"]
+            )
 
-        return action['action'], action['amount']
+        return action["action"], action["amount"]
 
     def receive_game_start_message(self, game_info):
         pass
@@ -39,8 +41,8 @@ class RandomPlayer(BasePokerPlayer):
 
 
 class NEATPlayer(RandomPlayer):
-    """A player which uses a NEAT neuro-evolved network to take actions.
-    """
+    """A player which uses a NEAT neuro-evolved network to take actions."""
+
     def __init__(self, net, uuid) -> None:
         self.net = net
         self.uuid = uuid
@@ -67,10 +69,10 @@ class NEATPlayer(RandomPlayer):
         raise_action = valid_actions[2]
         min_raise = raise_action["amount"]["min"]
         max_raise = raise_action["amount"]["max"]
-        
+
         if chosen_action_idx == 2:  # Raise min
             return "raise", min_raise
-        
+
         if chosen_action_idx == 3:  # Raise 2x min
             return "raise", min_raise * 2
 
@@ -78,22 +80,24 @@ class NEATPlayer(RandomPlayer):
             return "raise", min_raise * 3
 
         if chosen_action_idx == 5:  # Raise max
-            return "raise", max_raise # All-in
-        
+            return "raise", max_raise  # All-in
+
         raise ValueError(f"Invalid action index: {chosen_action_idx}")
 
 
 class CallPlayer(RandomPlayer):
     """A player which always calls."""
+
     def declare_action(self, valid_actions, hole_card, round_state):
         action = valid_actions[1]
         # print(action['action'])
-        return action['action'], action['amount']
+        return action["action"], action["amount"]
 
 
 class FoldPlayer(RandomPlayer):
     """A player which always folds."""
+
     def declare_action(self, valid_actions, hole_card, round_state):
         action = valid_actions[0]
         # print(action['action'])
-        return action['action'], action['amount']
+        return action["action"], action["amount"]

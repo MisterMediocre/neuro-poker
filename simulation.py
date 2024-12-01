@@ -5,8 +5,8 @@
 TODO: Fill out script, add more options, etc.
 """
 
-from neuropoker.player import RandomPlayer, CallPlayer
 from neuropoker.game import evaluate_fitness
+from neuropoker.player import CallPlayer, RandomPlayer
 
 
 def main() -> None:

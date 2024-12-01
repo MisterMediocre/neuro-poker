@@ -1,35 +1,33 @@
 """Classes and functions for NEAT poker models.
 """
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple, List
 import random
 import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Final, List, Optional, Tuple
 
 import neat
 import neat.parallel
 
-from neuropoker.player import NEATPlayer, RandomPlayer
 from neuropoker.game import evaluate_fitness
+from neuropoker.player import NEATPlayer, RandomPlayer
 
 
 @dataclass
 class NEATEvolution:
-    """The result of a NEAT neuroevolution training run.
-    """
+    """The result of a NEAT neuroevolution training run."""
+
     population: neat.Population
     stats: neat.StatisticsReporter
     best_genome: neat.DefaultGenome
 
 
 def evaluate_genome(
-    genome: neat.DefaultGenome, 
-    config: neat.Config, 
-    seed: Optional[int] = None
+    genome: neat.DefaultGenome, config: neat.Config, seed: Optional[int] = None
 ) -> float:
     """Evaluate a single genome.
-    
+
     Parameters:
         genome: neat.DefaultGenome
             The genome to evaluate.
@@ -48,11 +46,10 @@ def evaluate_genome(
 
 
 def eval_genomes(
-    genomes: List[Tuple[int, neat.DefaultGenome]], 
-    config: neat.Config
+    genomes: List[Tuple[int, neat.DefaultGenome]], config: neat.Config
 ) -> None:
     """Evaluate the fitness for a list of genomes.
-    
+
     Parameters:
         genomes: List[Tuple[int, neat.DefaultGenome]]
             The genomes to evaluate.
@@ -66,13 +63,13 @@ def eval_genomes(
 
 
 def run_neat(
-    evolution: Optional[NEATEvolution] = None, 
+    evolution: Optional[NEATEvolution] = None,
     config_file: Path = Path("config-feedforward.txt"),
     num_generations: int = 50,
     num_cores: int = 1,
 ) -> NEATEvolution:
     """Run NEAT neuroevolution to evolve poker players.
-    
+
     Parameters:
         evolution: NEATEvolution | None
             The initial evolution to evolve from, if any.
@@ -89,18 +86,16 @@ def run_neat(
     """
     # Load configuration
     config = neat.Config(
-        neat.DefaultGenome, 
+        neat.DefaultGenome,
         neat.DefaultReproduction,
-        neat.DefaultSpeciesSet, 
-        neat.DefaultStagnation, 
-        config_file
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_file,
     )
 
     # Get or create population
     population: neat.Population = (
-        evolution.population 
-        if evolution is not None 
-        else neat.Population(config)
+        evolution.population if evolution is not None else neat.Population(config)
     )
 
     # Add reporters
@@ -114,8 +109,7 @@ def run_neat(
     # winner = population.run(eval_genomes, n=50)
     # TODO: Fix type warning
     winner: Final[neat.DefaultGenome] = population.run(  # type: ignore
-        evaluator.evaluate, 
-        n=num_generations
+        evaluator.evaluate, n=num_generations
     )
 
     # print("Best genome:", winner)

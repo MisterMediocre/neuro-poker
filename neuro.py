@@ -4,8 +4,8 @@
 """
 
 import argparse
-import pickle
 import os
+import pickle
 from pathlib import Path
 from typing import Final
 
@@ -19,7 +19,7 @@ DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 
 def get_args() -> argparse.Namespace:
     """Get arguments for the script.
-    
+
     Returns:
         args: argparse.Namespace
             Arguments.
@@ -27,40 +27,40 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a poker player using NEAT.")
 
     parser.add_argument(
-        "-f", "--evolution-file", 
-        type=Path, 
-        default=DEFAULT_EVOLUTION_FILE, 
+        "-f",
+        "--evolution-file",
+        type=Path,
+        default=DEFAULT_EVOLUTION_FILE,
         help=(
             "File to read/save the evolution to/from. "
             f"(default: {DEFAULT_EVOLUTION_FILE})"
-        )
+        ),
     )
     parser.add_argument(
-        "-m", "--config-file",
+        "-m",
+        "--config-file",
         type=Path,
         default=DEFAULT_CONFIG_FILE,
         help=(
             "File to read the NEAT model configuration from. "
             f"(default: {DEFAULT_CONFIG_FILE})"
-        )
+        ),
     )
     parser.add_argument(
-        "-g", "--num-generations",
+        "-g",
+        "--num-generations",
         type=int,
         default=DEFAULT_NUM_GENERATIONS,
-        help=(
-            "Number of generations to run. "
-            f"(default: {DEFAULT_NUM_GENERATIONS})"
-        )
+        help=("Number of generations to run. " f"(default: {DEFAULT_NUM_GENERATIONS})"),
     )
     parser.add_argument(
-        "-c", "--num-cores",
+        "-c",
+        "--num-cores",
         type=int,
         default=DEFAULT_NUM_CORES,
         help=(
-            "Number of cores to use for evaluation. "
-            f"(default: {DEFAULT_NUM_CORES})"
-        )
+            "Number of cores to use for evaluation. " f"(default: {DEFAULT_NUM_CORES})"
+        ),
     )
 
     return parser.parse_args()
@@ -96,7 +96,9 @@ def main() -> None:
             if not isinstance(evolution, NEATEvolution):
                 raise ValueError("Evolution file is invalid")
 
-            print(f"Running until generation {num_generations + evolution.population.generation}...")
+            print(
+                f"Running until generation {num_generations + evolution.population.generation}..."
+            )
     else:
         # Start from scratch
         print("Starting new evolution")
@@ -104,10 +106,10 @@ def main() -> None:
 
     # Run NEAT
     evolution = run_neat(
-        evolution, 
-        config_file = config_file,
-        num_generations = num_generations, 
-        num_cores = num_cores
+        evolution,
+        config_file=config_file,
+        num_generations=num_generations,
+        num_cores=num_cores,
     )
 
     # Save model
