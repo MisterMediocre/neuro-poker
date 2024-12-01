@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from pypokerengine.engine.table import Table
 from pypokerengine.utils.card_utils import gen_cards
 from pypokerengine.engine import deck
