@@ -74,10 +74,6 @@ players_info = {
     "uuid-3": {"name": "player3", "stack": STACK},
 }
 
-ranks = {"6": 0, "7": 1, "8": 2, "9": 3, "T": 4, "J": 5, "Q": 6, "K": 7, "A": 8}
-suits = {"C": 0, "D": 1, "H": 2, "S": 3}
-street_mapping = {"flop": 1, "turn": 2, "river": 3}
-
 
 def gen_deck(seed: Optional[int] = None) -> Deck:
     """Generate a deck.
@@ -94,6 +90,12 @@ def gen_deck(seed: Optional[int] = None) -> Deck:
         random.shuffle(short_card_ids)
         random.seed(seed)
     return Deck(cheat=True, cheat_card_ids=short_card_ids)
+
+
+
+ranks = {"6": 0, "7": 1, "8": 2, "9": 3, "T": 4, "J": 5, "Q": 6, "K": 7, "A": 8}
+suits = {"C": 0, "D": 1, "H": 2, "S": 3}
+street_mapping = {"flop": 1, "turn": 2, "river": 3}
 
 
 def card_to_index(card) -> int:
@@ -115,7 +117,7 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
 
     Parameters:
         hole_card: ???
-            The hole card.
+            The private cards of the player.
         round_state: ???
             The state of the current round.
         player_uuid: ???
@@ -142,6 +144,7 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
 
     for card in hole_card:
         idx = card_to_index(card)
+        private_cards[idx] = 1
 
     for street, actions in round_state["action_histories"].items():
         for action in actions:
