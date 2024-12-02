@@ -111,6 +111,9 @@ def card_to_index(card) -> int:
     """
     return ranks[card[1]] + suits[card[0]] * 9
 
+state_mapping = {"participating": 1, "folded": 0, "allin": 2}
+
+
 
 
 # TODO: Add state of each player (Folded, all-in etc)
@@ -138,8 +141,6 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
     street = round_state["street"]
     community_cards = round_state["community_card"]
 
-    stack_sizes = [player["stack"] for player in round_state["seats"]]
-
     for card in community_cards:
         idx = card_to_index(card)
         public_cards[idx] = street_mapping[street]
@@ -155,14 +156,22 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
     player_positions = {p["uuid"]: i for i, p in enumerate(rotated_seats)}
     normalized_position = player_positions[player_uuid] / (NUM_PLAYERS - 1)
 
+    stack_sizes = [p["stack"] for p in rotated_seats]
+
     # Store the bet made by each player, relative to the dealer position
+    # The sum of all bets is the pot size, which the model can figure out
     for street_name, actions in round_state["action_histories"].items():
         for action in actions:
             if action["action"].lower() in ["call", "raise"]:
-                bet_amount = action.get("amount", 0)
-                relative_pos = player_positions.get(action["uuid"], -1)
+                bet_amount = action["amount"]
+                relative_pos = player_positions[action["uuid"]]
                 if relative_pos != -1:
                     player_bets[street_name][relative_pos] += bet_amount
+
+    # Self-state is redundant, but included for consistency
+    player_states = [
+        state_mapping[p["state"]] for p in rotated_seats
+    ]
 
     flattened_bets = np.concatenate(
         [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
@@ -173,6 +182,7 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
             private_cards,
             flattened_bets,
             stack_sizes,
+            player_states,
             [normalized_position],
         ]
     )
