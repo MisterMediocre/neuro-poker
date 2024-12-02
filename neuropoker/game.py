@@ -65,15 +65,7 @@ ANTE = 0
 STACK = 1000
 
 emulator = Emulator()
-emulator.set_game_rule(NUM_PLAYERS, 5, SMALL_BLIND_AMOUNT, BIG_BLIND_AMOUNT)
-
-
-players_info = {
-    "uuid-1": {"name": "player1", "stack": STACK},
-    "uuid-2": {"name": "player2", "stack": STACK},
-    "uuid-3": {"name": "player3", "stack": STACK},
-}
-
+emulator.set_game_rule(NUM_PLAYERS, 5, SMALL_BLIND_AMOUNT, ANTE)
 
 def gen_deck(seed: Optional[int] = None) -> Deck:
     """Generate a deck.
@@ -188,48 +180,67 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
     )
     return features
 
-
 def evaluate_fitness(
-    player_model,
-    opponent_models,
+    player_names,
+    player_models,
     num_games: int = 100,
     seed: int = 1,
-) -> float:
+) -> List[float]:
     """Evaluate the fitness of a player against other opponents.
 
     Parameters:
+        player_name:
+            The name of the player models.
         player_model:
-            The player model to evaluate.
-        opponent_models:
-            The list of opponent models to play against.
+            The player models to simulate.
         num_games:
             The number of games to play.
         seed:
             The seed to use for the evaluation.
 
     Returns:
-        fitness: float
-            The fitness of the player model.
+        fitnesses: List[float]
+            The fitness of the players
 
     Fitness is defined by the average winnings per game, but can
     be adjusted to something else (TODO).
     """
-    emulator.register_player("uuid-1", player_model)
-    emulator.register_player("uuid-2", opponent_models[0])
-    emulator.register_player("uuid-3", opponent_models[1])
 
-    sum_winnings = 0
+    assert len(player_names) == len(player_models)
+    assert len(player_names) ==  NUM_PLAYERS
+    assert num_games > 0
+
+
+    for name, model in zip(player_names, player_models):
+        emulator.register_player(name, model)
+
+    players_info = {
+        name: {"name": name, "stack": STACK, "uuid": name} for name in player_names
+    }
+
+    sum_winnings = [0.0] * NUM_PLAYERS
+
+    dealer_btn = 0
 
     for i in range(num_games):
         initial_state = emulator.generate_initial_game_state(players_info)
 
         # Same seed means same cards dealt
         initial_state["table"].deck = gen_deck(seed=seed * 100 + i)
-        initial_state["table"].dealer_btn = random.randint(0, 2)
+        initial_state["table"].dealer_btn = dealer_btn
 
         game_state, _ = emulator.start_new_round(initial_state)  # game_state, events
-        game_state, _ = emulator.run_until_game_finish(game_state)  # game_state, events
-        stack = game_state["table"].seats.players[0].stack
-        sum_winnings += stack - STACK
+        game_state, _ = emulator.run_until_round_finish(game_state)  # game_state, events
 
-    return sum_winnings / num_games
+        for j, player in enumerate(game_state["table"].seats.players):
+            print(j, player.name, player.stack - STACK)
+            sum_winnings[j] += player.stack - STACK
+
+        dealer_btn = (dealer_btn + 1) % NUM_PLAYERS
+
+    # divide each by number of games
+    for i in range(NUM_PLAYERS):
+        sum_winnings[i] = sum_winnings[i] / num_games
+
+
+    return sum_winnings

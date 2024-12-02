@@ -6,12 +6,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, List, Optional, Tuple
+from functools import partial
+import pickle
 
 import neat
 import neat.parallel
 
+from neuropoker.player import BasePlayer, NEATPlayer, RandomPlayer, CallPlayer, FoldPlayer
 from neuropoker.game import evaluate_fitness
-from neuropoker.player import NEATPlayer, RandomPlayer
 
 
 @dataclass
@@ -24,8 +26,7 @@ class NEATEvolution:
 
 
 def evaluate_genome(
-    genome: neat.DefaultGenome, config: neat.Config, seed: Optional[int] = None
-) -> float:
+    genome: neat.DefaultGenome, config: neat.Config, seed: Optional[int] = None, opponents: List[str] = ["RandomPlayer"]) -> float:
     """Evaluate a single genome.
 
     Parameters:
@@ -36,13 +37,29 @@ def evaluate_genome(
         seed: int | None
             The seed to use for the evaluation.
     """
+    
     if seed is None:
         random.seed(time.time())
         seed = random.randint(0, 1000)
     net = neat.nn.FeedForwardNetwork.create(genome, config)
-    player = NEATPlayer(net, "uuid-1")
-    f1 = evaluate_fitness(player, [RandomPlayer(), RandomPlayer()], seed=seed)
-    return f1
+
+    f1 = 0
+    for i in range(10):
+        # Play against some selection of available opponents
+
+        player_pos = random.randint(0, 2)
+        opponent_1_pos = (player_pos + 1) % 3
+        opponent_2_pos = (player_pos + 2) % 3
+
+        player_names = [f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)]
+
+        players = [BasePlayer()] * 3  # Initialize a list of size 3 with None
+        players[player_pos] = NEATPlayer(net, player_names[player_pos])
+        players[opponent_1_pos] = load_player(random.choice(opponents), player_names[opponent_1_pos])
+        players[opponent_2_pos] = load_player(random.choice(opponents), player_names[opponent_2_pos])
+
+        f1 += evaluate_fitness(player_names, players, seed=seed)[player_pos]
+    return f1/10
 
 
 def eval_genomes(
@@ -62,11 +79,40 @@ def eval_genomes(
         genome.fitness = evaluate_genome(genome, config, seed)  # type: ignore
 
 
+def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
+    """Get the network from the best genome.
+
+    Parameters:
+        evolution: NEATEvolution
+            The evolution to get the network from.
+
+    Returns:
+        net: neat.nn.FeedForwardNetwork
+            The network.
+    """
+    return neat.nn.FeedForwardNetwork.create(evolution.best_genome, evolution.population.config)
+
+
+def load_player(definition: str, name: str) -> BasePlayer:
+    if definition == "RandomPlayer":
+        return RandomPlayer()
+    if definition == "CallPlayer":
+        return CallPlayer()
+    if definition == "FoldPlayer":
+        return FoldPlayer()
+
+    # Else, the definition is a path to a NEAT file
+    with open(definition, "rb") as f:
+        evolution = pickle.load(f)
+        net = get_network(evolution)
+        return NEATPlayer(net, name)
+
 def run_neat(
     evolution: Optional[NEATEvolution] = None,
     config_file: Path = Path("config-feedforward.txt"),
     num_generations: int = 50,
     num_cores: int = 1,
+    opponents: List[str] = ["RandomPlayer"],
 ) -> NEATEvolution:
     """Run NEAT neuroevolution to evolve poker players.
 
@@ -104,7 +150,9 @@ def run_neat(
     population.add_reporter(stats)
 
     # Run NEAT
-    evaluator = neat.parallel.ParallelEvaluator(num_cores, evaluate_genome)
+    curried_evaluate_genome = partial(evaluate_genome, opponents=opponents)
+
+    evaluator = neat.parallel.ParallelEvaluator(num_cores, curried_evaluate_genome)
 
     # winner = population.run(eval_genomes, n=50)
     # TODO: Fix type warning
