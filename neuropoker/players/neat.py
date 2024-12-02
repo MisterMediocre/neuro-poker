@@ -6,6 +6,7 @@ from typing import Tuple
 import numpy as np
 
 from neuropoker.game_utils import extract_features
+from neuropoker.players.naive import RandomPlayer
 from neuropoker.players.base import BasePlayer
 
 
@@ -19,16 +20,16 @@ class NEATPlayer(BasePlayer):
 
     def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
 
-        ## Bootstrap the model by ensuring aggresiveness at the start
+        random_player = RandomPlayer()
+
+        ## Bootstrap the model by ensuring it sees a variety of situations
         if self.training:
-            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.20:
-                return "call", valid_actions[1]["amount"]
-            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.20:
-                return "raise", valid_actions[2]["amount"]["min"]
-            if len(round_state["community_card"]) == 3 and np.random.rand() < 0.3:
-                return "call", valid_actions[1]["amount"]
-
-
+            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.30:
+                return random_player.declare_action(valid_actions, hole_card, round_state)
+            if len(round_state["community_card"]) == 3 and np.random.rand() < 0.2:
+                return random_player.declare_action(valid_actions, hole_card, round_state)
+            if len(round_state["community_card"]) == 4 and np.random.rand() < 0.15:
+                return random_player.declare_action(valid_actions, hole_card, round_state)
 
         # print(hole_card)
         # print(round_state["community_card"])

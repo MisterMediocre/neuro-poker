@@ -73,9 +73,9 @@ def evaluate_genome(
             random.choice(opponents), player_names[opponent_2_pos]
         )
 
-        # Play each position 100 times, but with same seeds and hence same cards drawn
+        # Play each position 400 times, but with same seeds and hence same cards drawn
         player_performance = evaluate_performance(
-            player_names, players, seed=seed, num_games=200
+            player_names, players, seed=seed, num_games=400
         )[player_name]
         average_winnings = (
             player_performance["winnings"] / player_performance["num_games"]
