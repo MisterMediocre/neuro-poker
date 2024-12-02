@@ -112,6 +112,8 @@ def card_to_index(card) -> int:
     return ranks[card[1]] + suits[card[0]] * 9
 
 
+
+# TODO: Add state of each player (Folded, all-in etc)
 def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
     """Extract features for a poker agent from the current game state.
 
@@ -146,19 +148,21 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
         idx = card_to_index(card)
         private_cards[idx] = 1
 
-    for street, actions in round_state["action_histories"].items():
-        for action in actions:
-            if action["action"] in ["call", "raise"]:
-                player_pos = next(
-                    i
-                    for i, p in enumerate(round_state["seats"])
-                    if p["uuid"] == action["uuid"]
-                )
-                player_bets[street][player_pos] += action["amount"]
+    # Dealer position is 0, then 1, then 2 is the guy before the dealer
+    dealer_index = round_state["dealer_btn"]
+    rotated_seats = round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
 
-    player_positions = [p["uuid"] for p in round_state["seats"]]
-    player_position_index = player_positions.index(player_uuid)
-    normalized_position = player_position_index / (NUM_PLAYERS - 1)
+    player_positions = {p["uuid"]: i for i, p in enumerate(rotated_seats)}
+    normalized_position = player_positions[player_uuid] / (NUM_PLAYERS - 1)
+
+    # Store the bet made by each player, relative to the dealer position
+    for street_name, actions in round_state["action_histories"].items():
+        for action in actions:
+            if action["action"].lower() in ["call", "raise"]:
+                bet_amount = action.get("amount", 0)
+                relative_pos = player_positions.get(action["uuid"], -1)
+                if relative_pos != -1:
+                    player_bets[street_name][relative_pos] += bet_amount
 
     flattened_bets = np.concatenate(
         [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
