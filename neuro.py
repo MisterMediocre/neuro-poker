@@ -1,119 +1,122 @@
-import neat
-import neat.parallel
+#!/usr/bin/env python3
 
-import numpy as np
-import random
+"""Run NEAT to neuro-evolve poker players using self-play.
+"""
+
+import argparse
+import os
 import pickle
-import time
+from pathlib import Path
+from typing import Final
 
-from simulation import extract_features
-from simulation import RandomPlayer
-from simulation import evaluate_fitness
-from simulation import NUM_PLAYERS, SMALL_BLIND_AMOUNT, BIG_BLIND_AMOUNT, STACK
+from neuropoker.model import NEATEvolution, run_neat
 
-class NEATPlayer(RandomPlayer):
-    def __init__(self, net, uuid):
-        self.net = net
-        self.uuid = uuid
-
-    def declare_action(self, valid_actions, hole_card, round_state):
-        features = extract_features(hole_card, round_state, self.uuid)
-        output = self.net.activate(features)  # Neural network output
-        chosen_action_idx = np.argmax(output)
-
-        # Following are the allowed actions
-        # 0: fold
-        # 1: call
-        # 2: raise min
-        # 3: raise 2x min
-        # 4: raise 3x min
-        # 5: raise max
-
-        if chosen_action_idx == 0:  # Fold
-            return "fold", 0
-
-        if chosen_action_idx == 1:  # Call
-            return "call", valid_actions[1]["amount"]
-
-        raise_action = valid_actions[2]
-        min_raise = raise_action["amount"]["min"]
-        max_raise = raise_action["amount"]["max"]
-        
-        if chosen_action_idx == 2:  # Raise min
-            return "raise", min_raise
-        
-        if chosen_action_idx == 3:  # Raise 2x min
-            return "raise", min_raise * 2
-
-        if chosen_action_idx == 4:  # Raise 3x min
-            return "raise", min_raise * 3
-
-        if chosen_action_idx == 5:  # Raise max
-            return "raise", max_raise # All-in
+DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
+DEFAULT_CONFIG_FILE: Final[Path] = Path("config-feedforward.txt")
+DEFAULT_NUM_GENERATIONS: Final[int] = 50
+DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 
 
-def evaluate_genome(genome, config, seed=None):
-    if seed is None:
-        random.seed(time.time())
-        seed = random.randint(0, 1000)
-    net = neat.nn.FeedForwardNetwork.create(genome, config)
-    player = NEATPlayer(net, "uuid-1")
-    f1 = evaluate_fitness(player, [RandomPlayer(), RandomPlayer()], seed=seed)
-    return f1
+def get_args() -> argparse.Namespace:
+    """Get arguments for the script.
+
+    Returns:
+        args: argparse.Namespace
+            Arguments.
+    """
+    parser = argparse.ArgumentParser(description="Train a poker player using NEAT.")
+
+    parser.add_argument(
+        "-f",
+        "--evolution-file",
+        type=Path,
+        default=DEFAULT_EVOLUTION_FILE,
+        help=(
+            "File to read/save the evolution to/from. "
+            f"(default: {DEFAULT_EVOLUTION_FILE})"
+        ),
+    )
+    parser.add_argument(
+        "-m",
+        "--config-file",
+        type=Path,
+        default=DEFAULT_CONFIG_FILE,
+        help=(
+            "File to read the NEAT model configuration from. "
+            f"(default: {DEFAULT_CONFIG_FILE})"
+        ),
+    )
+    parser.add_argument(
+        "-g",
+        "--num-generations",
+        type=int,
+        default=DEFAULT_NUM_GENERATIONS,
+        help=("Number of generations to run. " f"(default: {DEFAULT_NUM_GENERATIONS})"),
+    )
+    parser.add_argument(
+        "-c",
+        "--num-cores",
+        type=int,
+        default=DEFAULT_NUM_CORES,
+        help=(
+            "Number of cores to use for evaluation. " f"(default: {DEFAULT_NUM_CORES})"
+        ),
+    )
+
+    return parser.parse_args()
 
 
-def eval_genomes(genomes, config):
-    seed = random.randint(0, 1000)
-    for genome_id, genome in genomes:
-        genome.fitness = evaluate_genome(genome, config, seed)
+def main() -> None:
+    """Run the script."""
 
+    # Read args
+    args: Final[argparse.Namespace] = get_args()
+    evolution_file: Final[Path] = args.evolution_file
+    config_file: Final[Path] = args.config_file
+    num_cores: Final[int] = args.num_cores
+    num_generations: Final[int] = args.num_generations
 
-def run_neat(population = None, n = 50):
-    # Load configuration
-    config_path = "config-feedforward.txt"
-    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                         neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+    print("Running with:")
+    print(f"    Evolution file : {evolution_file}")
+    print(f"    Config file    : {config_file}")
+    print(f"    Generations    : {num_generations}")
+    print(f"    Cores          : {num_cores}")
+    print()
 
-    # Create population
-    if population is None:
-        population = neat.Population(config)
+    # Initialize variables
+    evolution = None  # Evolved population
 
+    # Load previous evolution, if it exists
+    if evolution_file.exists():
+        # Load evolution
+        print(f"Loading evolution file from {evolution_file}...")
+        with evolution_file.open("rb") as ef:
+            evolution = pickle.load(ef)
 
-    # Add reporters
-    population.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    population.add_reporter(stats)
+            if not isinstance(evolution, NEATEvolution):
+                raise ValueError("Evolution file is invalid")
+
+            print(
+                f"Running until generation {num_generations + evolution.population.generation}..."
+            )
+    else:
+        # Start from scratch
+        print("Starting new evolution")
+        print(f"Running until generation {num_generations}...")
 
     # Run NEAT
-    evaluator = neat.parallel.ParallelEvaluator(4, evaluate_genome)
+    evolution = run_neat(
+        evolution,
+        config_file=config_file,
+        num_generations=num_generations,
+        num_cores=num_cores,
+    )
 
-    # winner = population.run(eval_genomes, n=50)
-    winner = population.run(evaluator.evaluate, n=50)
+    # Save model
+    with evolution_file.open("wb") as ef:
+        pickle.dump(evolution, ef)
+        print(f"Saved evolution at {evolution_file}")
 
 
-    # print("Best genome:", winner)
-    return population, stats, winner
-
-
-FILE = "models/neat_poker.pkl"
 if __name__ == "__main__":
-
-    population = None
-    n = 50
-    # Check if the file exists
-    try:
-        with open(FILE, "rb") as f:
-            population, stats, best_genome = pickle.load(f)
-            n = n + stats.generation
-            print("Loaded population")
-    except Exception as e:
-        print(e)
-
-
-    population, stats, best_genome = run_neat(population, n)
-
-
-    with open(FILE, "wb") as f:
-        pickle.dump((population, stats, best_genome), f)
-
-
+    main()
