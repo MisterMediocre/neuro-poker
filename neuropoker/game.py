@@ -4,12 +4,11 @@
 from typing import Any, Dict, Final, List, TypedDict
 
 from pypokerengine.api.emulator import Emulator
-from pypokerengine.engine.pay_info import PayInfo
 from pypokerengine.engine.player import Player
 
 from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS
-from neuropoker.player import BasePlayer
+from neuropoker.players.base import BasePlayer
 
 SMALL_BLIND_AMOUNT: Final[int] = 25
 BIG_BLIND_AMOUNT: Final[int] = 50

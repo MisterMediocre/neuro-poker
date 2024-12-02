@@ -13,13 +13,9 @@ import neat
 import neat.parallel
 
 from neuropoker.game import evaluate_performance
-from neuropoker.player import (
-    BasePlayer,
-    CallPlayer,
-    FoldPlayer,
-    NEATPlayer,
-    RandomPlayer,
-)
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat import NEATPlayer
 
 
 @dataclass
