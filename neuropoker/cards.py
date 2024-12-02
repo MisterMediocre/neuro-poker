@@ -8,6 +8,7 @@ from pypokerengine.engine.card import Card
 from pypokerengine.engine.deck import Deck
 
 SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
+SHORTER_SUITS: Final[List[str]] = ["C", "D", "H"]
 SHORT_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
 
 
@@ -41,8 +42,10 @@ def get_card_list(
         K: King
         A: Ace
     """
-    if suits is None:
-        suits = SHORT_SUITS
+    assert suits is not None
+    assert ranks is not None
+    # if suits is None:
+        # suits = SHORT_SUITS
     if ranks is None:
         ranks = SHORT_RANKS
 
@@ -66,17 +69,20 @@ def get_card_index(
         index: int
             The index of the card.
     """
+    assert suits is not None
+    assert ranks is not None
     if ranks is None:
         ranks = SHORT_RANKS
     if suits is None:
         suits = SHORT_SUITS
+
     if len(card) != 2:
         raise ValueError("Card must be a 2-character string.")
 
     return ranks.index(card[1]) + suits.index(card[0]) * len(ranks)
 
 
-def get_deck(cards: List[str] = get_card_list(), seed: Optional[int] = None) -> Deck:
+def get_deck(cards: List[str] = [], seed: Optional[int] = None) -> Deck:
     """Get the deck represented by a list of cards, randomly shuffled.
 
     Parameters:
@@ -89,6 +95,8 @@ def get_deck(cards: List[str] = get_card_list(), seed: Optional[int] = None) -> 
         deck: Deck
             The deck of cards.
     """
+    assert len(cards) > 0
+
     card_ids: Final[List[int]] = [Card.from_str(s).to_id() for s in cards]
     if seed is not None:
         # print("Seed used: ", seed)

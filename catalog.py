@@ -26,12 +26,12 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
     "call": load_player("CallPlayer", "call"),
     "call2": load_player("CallPlayer", "call2"),
     "call3": load_player("CallPlayer", "call3"),
-    # model_0 has been trained against the fold player
-    "model_0": load_player("models/model_0.pkl", "model_0"),
-    "model_0_2": load_player("models/model_0.pkl", "model_0_2"),
-    # model_1 has been trained against the call player
-    "model_1": load_player("models/model_1.pkl", "model_1"),
-    "model_1_2": load_player("models/model_1.pkl", "model_1_2"),
+    # model_0 has been trained against the fold player, for playing 4-suit 3-player
+    "model_0": load_player("models/3p_4s/model_0.pkl", "model_0"),
+    "model_0_2": load_player("models/3p_4s/model_0.pkl", "model_0_2"),
+    # model_1 has been trained against the call player, for playing 4-suit 3-player
+    "model_1": load_player("models/3p_4s/model_1.pkl", "model_1"),
+    "model_1_2": load_player("models/3p_4s/model_1.pkl", "model_1_2"),
 }
 
 
@@ -113,7 +113,6 @@ def main():
 
     # Expect the model to fully exploit the call players
     compete("call", "call2", "call3", 100)
-    compete("model_1", "call", "call2", 500)
     compete("model_1", "call", "call2", 500)
 
     # Expect the models to tie, while taking advantage of the fold player

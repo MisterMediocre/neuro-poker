@@ -4,7 +4,9 @@ from typing import Any, Dict, Final, List
 
 import numpy as np
 
-from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_index
+from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_index, SHORTER_SUITS
+
+STACK: Final[int] = 1000
 
 NUM_PLAYERS: Final[int] = 3
 
@@ -45,22 +47,22 @@ def extract_features(
         Game ranks
         Game suits
     """
-    public_cards: np.ndarray = np.zeros(36)
-    private_cards: np.ndarray = np.zeros(36)
+    public_cards: np.ndarray = np.zeros(len(SHORT_RANKS) * len(SHORTER_SUITS))
+    private_cards: np.ndarray = np.zeros(len(SHORT_RANKS) * len(SHORTER_SUITS))
 
-    player_bets: Dict[str, List[int]] = {
+    player_bets: Dict[str, List[float]] = {
         street: [0] * NUM_PLAYERS for street in ["preflop", "flop", "turn", "river"]
-    }  # Bets per street
+    }  # Normalized bets per street
 
     community_cards: Final[List[str]] = round_state["community_card"]
 
     # for card in community_cards:
     for i, card in enumerate(community_cards):
-        idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORT_SUITS)
+        idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORTER_SUITS)
         public_cards[idx] = STREET_MAPPING[i]
 
     for card in hole_card:
-        idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORT_SUITS)
+        idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORTER_SUITS)
         private_cards[idx] = 1
 
     # Dealer position is 0, then 1, then 2 is the guy before the dealer
@@ -84,9 +86,10 @@ def extract_features(
         for action in actions:
             if action["action"].lower() in ["call", "raise"]:
                 bet_amount = action["amount"]
+                normalized_bet_amount: float = bet_amount/STACK
                 relative_pos = player_positions[action["uuid"]]
                 if relative_pos != -1:
-                    player_bets[street_name][relative_pos] += bet_amount
+                    player_bets[street_name][relative_pos] += normalized_bet_amount
 
     # Self-state is redundant, but included for consistency
     player_states: List[int] = [STATE_MAPPING[p["state"]] for p in rotated_seats]
