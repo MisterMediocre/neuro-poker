@@ -12,11 +12,24 @@ from neuropoker.players.base import BasePlayer
 class NEATPlayer(BasePlayer):
     """A player which uses a NEAT neuro-evolved network to take actions."""
 
-    def __init__(self, net, uuid) -> None:
+    def __init__(self, net, uuid, training=False) -> None:
+        self.training = training
         self.net = net
         self.uuid = uuid
 
     def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
+
+        ## Bootstrap the model by ensuring aggresiveness at the start
+        if self.training:
+            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.20:
+                return "call", valid_actions[1]["amount"]
+            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.20:
+                return "raise", valid_actions[2]["amount"]["min"]
+            if len(round_state["community_card"]) == 3 and np.random.rand() < 0.3:
+                return "call", valid_actions[1]["amount"]
+
+
+
         # print(hole_card)
         # print(round_state["community_card"])
         features = extract_features(hole_card, round_state, self.uuid)

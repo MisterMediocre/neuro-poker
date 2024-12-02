@@ -28,10 +28,9 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
     "call3": load_player("CallPlayer", "call3"),
     # model_0 has been trained against the fold player, for playing 4-suit 3-player
     "model_0": load_player("models/3p_4s/model_0.pkl", "model_0"),
-    "model_0_2": load_player("models/3p_4s/model_0.pkl", "model_0_2"),
     # model_1 has been trained against the call player, for playing 4-suit 3-player
-    "model_1": load_player("models/3p_4s/model_1.pkl", "model_1"),
-    "model_1_2": load_player("models/3p_4s/model_1.pkl", "model_1_2"),
+    # "model_1": load_player("models/3p_4s/model_1.pkl", "model_1"),
+    "model_1": load_player("models/3p_3s/model_0.pkl", "model_1"),
 }
 
 
