@@ -1,19 +1,25 @@
 """Classes and functions for NEAT poker models.
 """
 
+import pickle
 import random
 import time
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Final, List, Optional, Tuple
-from functools import partial
-import pickle
 
 import neat
 import neat.parallel
 
-from neuropoker.player import BasePlayer, NEATPlayer, RandomPlayer, CallPlayer, FoldPlayer
 from neuropoker.game import evaluate_fitness
+from neuropoker.player import (
+    BasePlayer,
+    CallPlayer,
+    FoldPlayer,
+    NEATPlayer,
+    RandomPlayer,
+)
 
 
 @dataclass
@@ -26,7 +32,11 @@ class NEATEvolution:
 
 
 def evaluate_genome(
-    genome: neat.DefaultGenome, config: neat.Config, seed: Optional[int] = None, opponents: List[str] = ["RandomPlayer"]) -> float:
+    genome: neat.DefaultGenome,
+    config: neat.Config,
+    seed: Optional[int] = None,
+    opponents: List[str] = ["RandomPlayer"],
+) -> float:
     """Evaluate a single genome.
 
     Parameters:
@@ -37,7 +47,7 @@ def evaluate_genome(
         seed: int | None
             The seed to use for the evaluation.
     """
-    
+
     if seed is None:
         random.seed(time.time())
         seed = random.randint(0, 1000)
@@ -51,15 +61,21 @@ def evaluate_genome(
         opponent_1_pos = (player_pos + 1) % 3
         opponent_2_pos = (player_pos + 2) % 3
 
-        player_names = [f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)]
+        player_names = [
+            f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)
+        ]
 
         players = [BasePlayer()] * 3  # Initialize a list of size 3 with None
         players[player_pos] = NEATPlayer(net, player_names[player_pos])
-        players[opponent_1_pos] = load_player(random.choice(opponents), player_names[opponent_1_pos])
-        players[opponent_2_pos] = load_player(random.choice(opponents), player_names[opponent_2_pos])
+        players[opponent_1_pos] = load_player(
+            random.choice(opponents), player_names[opponent_1_pos]
+        )
+        players[opponent_2_pos] = load_player(
+            random.choice(opponents), player_names[opponent_2_pos]
+        )
 
         f1 += evaluate_fitness(player_names, players, seed=seed)[player_pos]
-    return f1/10
+    return f1 / 10
 
 
 def eval_genomes(
@@ -90,7 +106,9 @@ def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
         net: neat.nn.FeedForwardNetwork
             The network.
     """
-    return neat.nn.FeedForwardNetwork.create(evolution.best_genome, evolution.population.config)
+    return neat.nn.FeedForwardNetwork.create(
+        evolution.best_genome, evolution.population.config
+    )
 
 
 def load_player(definition: str, name: str) -> BasePlayer:
@@ -106,6 +124,7 @@ def load_player(definition: str, name: str) -> BasePlayer:
         evolution = pickle.load(f)
         net = get_network(evolution)
         return NEATPlayer(net, name)
+
 
 def run_neat(
     evolution: Optional[NEATEvolution] = None,

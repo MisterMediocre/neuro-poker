@@ -7,7 +7,8 @@ from typing import Tuple
 import numpy as np
 from pypokerengine.players import BasePokerPlayer
 
-from neuropoker.game import extract_features
+from neuropoker.game_utils import extract_features
+
 
 class BasePlayer(BasePokerPlayer):
     """Base class for poker players."""
@@ -15,9 +16,15 @@ class BasePlayer(BasePokerPlayer):
     def declare_action(self, valid_actions, hole_card, round_state):
         raise NotImplementedError
 
-    def receive_game_start_message(self, game_info): pass
-    def receive_round_start_message(self, round_count, hole_card, seats): pass
-    def receive_street_start_message(self, street, round_state): pass
+    def receive_game_start_message(self, game_info):
+        pass
+
+    def receive_round_start_message(self, round_count, hole_card, seats):
+        pass
+
+    def receive_street_start_message(self, street, round_state):
+        pass
+
 
 class RandomPlayer(BasePlayer):
     """A player which takes random actions."""
@@ -31,6 +38,7 @@ class RandomPlayer(BasePlayer):
             )
 
         return action["action"], action["amount"]
+
 
 class NEATPlayer(BasePlayer):
     """A player which uses a NEAT neuro-evolved network to take actions."""

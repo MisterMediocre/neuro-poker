@@ -1,201 +1,167 @@
 """Classes and functions for poker games.
 """
 
-import random
-from typing import Dict, List, Optional
+from typing import Any, Dict, Final, List
 
-import numpy as np
 from pypokerengine.api.emulator import Emulator
-from pypokerengine.engine.card import Card
-from pypokerengine.engine.deck import Deck
+
+from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list, get_deck
+from neuropoker.game_utils import NUM_PLAYERS
+from neuropoker.player import BasePlayer
 
 # from pypokerengine.api.game import setup_config, start_poker
 # from pypokerengine.engine.player import Player
 # from pypokerengine.engine.poker_constants import PokerConstants as Const
 # from pypokerengine.engine.table import Table
-# from pypokerengine.players import BasePokerPlayer
 # from pypokerengine.utils.card_utils import gen_cards
 
-# C = Clubs, D = Diamonds, H = Hearts, S = Spades
-short_cards = [
-    "C6",
-    "D6",
-    "H6",
-    "S6",  # 6s
-    "C7",
-    "D7",
-    "H7",
-    "S7",  # 7s
-    "C8",
-    "D8",
-    "H8",
-    "S8",  # 8s
-    "C9",
-    "D9",
-    "H9",
-    "S9",  # 9s
-    "CT",
-    "DT",
-    "HT",
-    "ST",  # 10s
-    "CJ",
-    "DJ",
-    "HJ",
-    "SJ",  # Jacks
-    "CQ",
-    "DQ",
-    "HQ",
-    "SQ",  # Queens
-    "CK",
-    "DK",
-    "HK",
-    "SK",  # Kings
-    "CA",
-    "DA",
-    "HA",
-    "SA",  # Aces
-]
-short_card_ids = [Card.from_str(s).to_id() for s in short_cards]
 
+class Game:
+    """A poker game."""
 
-NUM_PLAYERS = 3
-SMALL_BLIND_AMOUNT = 25
-BIG_BLIND_AMOUNT = 50
-ANTE = 0
-STACK = 1000
+    def __init__(
+        self,
+        player_names: List[str],
+        player_models: List[BasePlayer],
+        cards: List[str] = get_card_list(),
+        max_rounds: int = 5,
+        small_blind_amount: int = 25,
+        big_blind_amount: int = 50,
+        stack: int = 1000,
+    ) -> None:
+        """Initialize the game.
 
-emulator = Emulator()
-emulator.set_game_rule(NUM_PLAYERS, 5, SMALL_BLIND_AMOUNT, ANTE)
+        Parameters:
+            player_names: List[str]
+                The names of the players.
+            player_models: List[BasePlayer]
+                The models of the players.
+            cards: List[str]
+                The list of cards available to use in the deck.
+            max_rounds: int
+                The maximum number of rounds.
+            small_blind_amount: int
+                The amount of the small blind.
+            big_blind_amount: int
+                The amount of the big blind.
+            stack: int
+                The stack size for each player.
+        """
+        assert len(player_names) == len(player_models)
+        assert len(player_names) == NUM_PLAYERS
 
-def gen_deck(seed: Optional[int] = None) -> Deck:
-    """Generate a deck.
+        self.players: Final[Dict[str, BasePlayer]] = {
+            name: model for name, model in zip(player_names, player_models)
+        }
+        self.players_info: Final[Dict[str, Dict[str, Any]]] = {
+            name: {"name": name, "stack": stack, "uuid": name} for name in self.players
+        }
 
-    Parameters:
-        seed: int | None
-            The random seed to use.
+        self.cards: Final[List[str]] = cards
+        self.max_rounds: Final[int] = max_rounds
+        self.small_blind_amount: Final[int] = small_blind_amount
+        self.big_blind_amount: Final[int] = big_blind_amount
+        self.stack: Final[int] = stack
 
-    Returns:
-        deck: Deck
-            The deck of cards.
-    """
-    if seed is not None:
-        random.shuffle(short_card_ids)
-        random.seed(seed)
-    return Deck(cheat=True, cheat_card_ids=short_card_ids)
+        # Confiugre poker emulator
+        self.emulator: Final[Emulator] = Emulator()
+        self.emulator.set_game_rule(
+            len(self.players),
+            self.max_rounds,
+            self.small_blind_amount,
+            self.big_blind_amount,
+        )
+        for name, model in self.players.items():
+            self.emulator.register_player(name, model)
 
+    def play(
+        self,
+        dealer_button: int = 0,
+        seed: int = 1,
+        games_played: int = 0,
+    ) -> List[float]:
+        """Play a single round/game of Poker.
 
+        Parameters:
+            dealer_button: int
+                The position of the dealer button.
+            seed: int
+                The seed to use for the game.
+            games_played: int
+                The number of games previously played.
+                (Used to keep decks unique in each game)
 
-ranks = {"6": 0, "7": 1, "8": 2, "9": 3, "T": 4, "J": 5, "Q": 6, "K": 7, "A": 8}
-suits = {"C": 0, "D": 1, "H": 2, "S": 3}
-street_mapping = {"flop": 1, "turn": 2, "river": 3}
+        Returns:
+            winnings: List[float]
+                The winnings of each player.
+        """
+        winnings: List[float] = [0.0] * len(self.players)
+        initial_state: Final[Dict[str, Any]] = (
+            self.emulator.generate_initial_game_state(self.players_info)
+        )
 
+        # Same seed means same cards dealt
+        initial_state["table"].deck = get_deck(
+            cards=self.cards, seed=seed * 100 + games_played
+        )
+        initial_state["table"].dealer_btn = dealer_button
 
-def card_to_index(card) -> int:
-    """Convert a card to an index.
+        game_state, _event = self.emulator.start_new_round(initial_state)
+        game_state, _event = self.emulator.run_until_game_finish(game_state)
 
-    Parameters:
-        card: ??? (TODO: Determine type)
-            The card to convert.
+        for j, player in enumerate(game_state["table"].seats.players):
+            # print(j, player.name, player.stack - STACK)
+            winnings[j] = player.stack - self.stack
 
-    Returns:
-        index: int
-            The index of the card.
-    """
-    return ranks[card[1]] + suits[card[0]] * 9
+        return winnings
 
-state_mapping = {"participating": 1, "folded": 0, "allin": 2}
+    def play_multiple(self, num_games: int = 100, seed: int = 1) -> List[float]:
+        """Play multiple games of Poker.
 
+        Parameters:
+            num_games: int
+                The number of games to play.
+            seed: int
+                The seed to use for the games.
 
+        Returns:
+            winnings: List[float]
+                Cumulative winnings of each player.
+        """
+        winnings: List[float] = [0] * len(self.players)
+        dealer_button: int = 0
 
+        for i in range(num_games):
+            # Play a game
+            game_winnings: List[float] = self.play(
+                dealer_button=dealer_button, seed=seed, games_played=i
+            )
 
-# TODO: Add state of each player (Folded, all-in etc)
-def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
-    """Extract features for a poker agent from the current game state.
+            # Update cumulative winnings
+            winnings = [w + game_winnings[j] for j, w in enumerate(winnings)]
 
-    Parameters:
-        hole_card: ???
-            The private cards of the player.
-        round_state: ???
-            The state of the current round.
-        player_uuid: ???
-            The player's UUID
+            # Update dealer button
+            dealer_button = (dealer_button + 1) % len(self.players)
 
-    Returns:
-        features: np.ndarray
-            The features extracted from the game state.
-    """
-    public_cards: np.ndarray = np.zeros(36)
-    private_cards: np.ndarray = np.zeros(36)
-    player_bets: Dict[str, List[int]] = {
-        street: [0] * NUM_PLAYERS for street in ["preflop", "flop", "turn", "river"]
-    }  # Bets per street
+        return winnings
 
-    street = round_state["street"]
-    community_cards = round_state["community_card"]
-
-    for card in community_cards:
-        idx = card_to_index(card)
-        public_cards[idx] = street_mapping[street]
-
-    for card in hole_card:
-        idx = card_to_index(card)
-        private_cards[idx] = 1
-
-    # Dealer position is 0, then 1, then 2 is the guy before the dealer
-    dealer_index = round_state["dealer_btn"]
-    rotated_seats = round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
-
-    player_positions = {p["uuid"]: i for i, p in enumerate(rotated_seats)}
-    normalized_position = player_positions[player_uuid] / (NUM_PLAYERS - 1)
-
-    stack_sizes = [p["stack"] for p in rotated_seats]
-
-    # Store the bet made by each player, relative to the dealer position
-    # The sum of all bets is the pot size, which the model can figure out
-    for street_name, actions in round_state["action_histories"].items():
-        for action in actions:
-            if action["action"].lower() in ["call", "raise"]:
-                bet_amount = action["amount"]
-                relative_pos = player_positions[action["uuid"]]
-                if relative_pos != -1:
-                    player_bets[street_name][relative_pos] += bet_amount
-
-    # Self-state is redundant, but included for consistency
-    player_states = [
-        state_mapping[p["state"]] for p in rotated_seats
-    ]
-
-    flattened_bets = np.concatenate(
-        [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
-    )
-    features = np.concatenate(
-        [
-            public_cards,
-            private_cards,
-            flattened_bets,
-            stack_sizes,
-            player_states,
-            [normalized_position],
-        ]
-    )
-    return features
 
 def evaluate_fitness(
-    player_names,
-    player_models,
+    player_names: List[str],
+    player_models: List[BasePlayer],
     num_games: int = 100,
     seed: int = 1,
 ) -> List[float]:
     """Evaluate the fitness of a player against other opponents.
 
     Parameters:
-        player_name:
-            The name of the player models.
-        player_model:
-            The player models to simulate.
-        num_games:
+        player_names: List[str]
+            The names of the players to simulate.
+        player_models: List[BasePlayer]
+            The models of the players to simulate.
+        num_games: int
             The number of games to play.
-        seed:
+        seed: int
             The seed to use for the evaluation.
 
     Returns:
@@ -205,42 +171,28 @@ def evaluate_fitness(
     Fitness is defined by the average winnings per game, but can
     be adjusted to something else (TODO).
     """
-
     assert len(player_names) == len(player_models)
-    assert len(player_names) ==  NUM_PLAYERS
+    assert len(player_names) == NUM_PLAYERS
     assert num_games > 0
 
+    # Create card list
+    cards: Final[List[str]] = get_card_list(
+        ranks=SHORT_RANKS, suits=SHORT_SUITS
+    )  # Use a smaller deck
 
-    for name, model in zip(player_names, player_models):
-        emulator.register_player(name, model)
+    # Create game
+    game: Final[Game] = Game(player_names, player_models, cards=cards)
 
-    players_info = {
-        name: {"name": name, "stack": STACK, "uuid": name} for name in player_names
-    }
+    # Play multiple games
+    sum_winnings: Final[List[float]] = game.play_multiple(
+        num_games=num_games, seed=seed
+    )
 
-    sum_winnings = [0.0] * NUM_PLAYERS
-
-    dealer_btn = 0
-
-    for i in range(num_games):
-        initial_state = emulator.generate_initial_game_state(players_info)
-
-        # Same seed means same cards dealt
-        initial_state["table"].deck = gen_deck(seed=seed * 100 + i)
-        initial_state["table"].dealer_btn = dealer_btn
-
-        game_state, _ = emulator.start_new_round(initial_state)  # game_state, events
-        game_state, _ = emulator.run_until_round_finish(game_state)  # game_state, events
-
-        for j, player in enumerate(game_state["table"].seats.players):
-            # print(j, player.name, player.stack - STACK)
-            sum_winnings[j] += player.stack - STACK
-
-        dealer_btn = (dealer_btn + 1) % NUM_PLAYERS
-
-    # divide each by number of games
-    for i in range(NUM_PLAYERS):
+    # Compute each player's fitness
+    #
+    # Divide each player's winnings by the number of games played.
+    for i in range(len(player_names)):
         sum_winnings[i] = sum_winnings[i] / num_games
 
-
+    # Return the fitnesses
     return sum_winnings
