@@ -4,9 +4,14 @@
 """
 from typing import Dict, Final, List
 
-from neuropoker.game import PlayerStats, default_player_stats, evaluate_performance, merge
+from neuropoker.game import (
+    PlayerStats,
+    default_player_stats,
+    evaluate_performance,
+    merge,
+)
 from neuropoker.model import load_player
-from neuropoker.player import BasePlayer
+from neuropoker.players.base import BasePlayer
 
 CATALOG: Final[Dict[str, BasePlayer]] = {
     # Random players
@@ -54,7 +59,6 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
         CATALOG[player_name] for player_name in player_names
     ]
 
-
     performances: Dict[str, PlayerStats]
     performances = {}
     for i in range(0, 3):
@@ -67,7 +71,9 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
         player_names_i = player_names[i:] + player_names[:i]
         player_models_i = player_models[i:] + player_models[:i]
 
-        performance = evaluate_performance(player_names_i, player_models_i, num_games, seed=1)
+        performance = evaluate_performance(
+            player_names_i, player_models_i, num_games, seed=1
+        )
         for player_name, stats in performance.items():
             performances[player_name] = merge(performances[player_name], stats)
 
@@ -98,15 +104,12 @@ def main():
     # Success
     # compete("fold", "model_0", "fold2", 30)
 
-
     # compete("call", "call2", "call3", 300)
 
     # compete("call", "model_1", "fold", 100)
 
-
     # Expect the model to fully exploit the folders
     # compete("model_1", "fold", "fold2", 300)
-
 
     # Expect the model to fully exploit the call players
     compete("call", "call2", "call3", 100)
@@ -115,8 +118,6 @@ def main():
 
     # Expect the models to tie, while taking advantage of the fold player
     # compete("model_1", "model_1_2", "fold", 30)
-
-
 
 
 if __name__ == "__main__":

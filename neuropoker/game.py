@@ -1,24 +1,23 @@
 """Classes and functions for poker games.
 """
 
-from typing import Any, Dict, Final, List, TypedDict, Dict
+from typing import Any, Dict, Final, List, TypedDict
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
-from pypokerengine.engine.pay_info import PayInfo
 
 from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS
-from neuropoker.player import BasePlayer
-
+from neuropoker.players.base import BasePlayer
 
 SMALL_BLIND_AMOUNT: Final[int] = 25
 BIG_BLIND_AMOUNT: Final[int] = 50
 STACK: Final[int] = 1000
 
-# TypedDict for game stats.
+
 class PlayerStats(TypedDict):
-    """The stats of a game."""
+    """A player's statistics for a game."""
+
     uuid: str
     winnings: float
     num_games: int
@@ -43,6 +42,12 @@ class PlayerStats(TypedDict):
 
 
 def default_player_stats() -> PlayerStats:
+    """Get the default set of player stats.
+
+    Returns:
+        default_stats: PlayerStats
+            The default set of player stats.
+    """
     return {
         "uuid": "",
         "winnings": 0,
@@ -69,11 +74,23 @@ def default_player_stats() -> PlayerStats:
 
 
 def read_game(game_state, events) -> Dict[str, PlayerStats]:
+    """Obtain each player's stats for a game.
+
+    Parameters:
+        game_state: Dict[str, Any]
+            The game state.
+        events: List[Dict[str, Any]]
+            The events of the game.
+
+    Returns:
+        player_stats: Dict[str, PlayerStats]
+            Each player's stats.
+    """
 
     # print(events)
 
-    player_stats = {}
-    players: List[Player] = game_state["table"].seats.players
+    player_stats: Dict[str, PlayerStats] = {}
+    players: Final[List[Player]] = game_state["table"].seats.players
     for player in players:
         default = default_player_stats()
         default["uuid"] = player.uuid
@@ -85,8 +102,8 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
 
     for event in events:
         if event["type"] == "event_round_finish":
-        # Process action histories to count actions
-            for street, actions in event["round_state"]["action_histories"].items():
+            # Process action histories to count actions
+            for _street, actions in event["round_state"]["action_histories"].items():
                 for action in actions:
                     uuid = action["uuid"]
                     # print(uuid, action["action"])
@@ -114,7 +131,18 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
 
 
 def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
-    """Merge two player stats into one."""
+    """Merge two players' stats into one.
+
+    Parameters:
+        stats1: PlayerStats
+            The first player's stats.
+        stats2: PlayerStats
+            The second player's stats.
+
+    Returns:
+        stats_merged: PlayerStats
+            The merged stats.
+    """
     assert stats1["uuid"] == stats2["uuid"]
     return {
         "uuid": stats1["uuid"],
@@ -139,6 +167,7 @@ def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
         # "river_calls": stats1["river_calls"] + stats2["river_calls"],
         # "river_raises": stats1["river_raises"] + stats2["river_raises"],
     }
+
 
 def bb_per_hand(stats: PlayerStats) -> float:
     """Compute the big blind per hand."""
@@ -196,7 +225,7 @@ class Game:
             len(self.players),
             self.max_rounds,
             self.small_blind_amount,
-            0, # NO ANTE
+            0,  # NO ANTE
         )
         for name, model in self.players.items():
             self.emulator.register_player(name, model)
@@ -222,7 +251,7 @@ class Game:
             winnings: List[float]
                 The winnings of each player.
         """
-        winnings: List[float] = [0.0] * len(self.players)
+        # winnings: List[float] = [0.0] * len(self.players)
         initial_state: Final[Dict[str, Any]] = (
             self.emulator.generate_initial_game_state(self.players_info)
         )
@@ -238,7 +267,9 @@ class Game:
 
         return read_game(game_state, events)
 
-    def play_multiple(self, num_games: int = 100, seed: int = 1) -> Dict[str, PlayerStats]:
+    def play_multiple(
+        self, num_games: int = 100, seed: int = 1
+    ) -> Dict[str, PlayerStats]:
         """Play multiple games of Poker.
 
         Parameters:
@@ -264,8 +295,8 @@ class Game:
                 dealer_button=dealer_button, seed=seed, games_played=i
             )
 
-            for player in round_stats:
-                player_stats[player] = merge(player_stats[player], round_stats[player])
+            for player, player_round_stats in round_stats.items():
+                player_stats[player] = merge(player_stats[player], player_round_stats)
 
             # print("Game", i, "done", round_stats['model_1']['winnings'])
 
@@ -306,14 +337,11 @@ def evaluate_performance(
     assert num_games > 0
 
     # Create card list
-    cards: Final[List[str]] = get_card_list(
-        ranks=SHORT_RANKS, suits=SHORT_SUITS
-    )  # Use a smaller deck
+    # Use a short deck
+    cards: Final[List[str]] = get_card_list(ranks=SHORT_RANKS, suits=SHORT_SUITS)
 
     # Create game
     game: Final[Game] = Game(player_names, player_models, cards=cards)
 
     # Play multiple games
-    return game.play_multiple(
-        num_games=num_games, seed=seed
-    )
+    return game.play_multiple(num_games=num_games, seed=seed)
