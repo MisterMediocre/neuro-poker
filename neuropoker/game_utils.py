@@ -9,11 +9,11 @@ from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_index
 NUM_PLAYERS: Final[int] = 3
 
 STREET_MAPPING: Final[Dict[int, int]] = {
-    0: 1, # Preflop
-    1: 1, # Preflop
-    2: 1, # Preflop
-    3: 2, # Flop
-    4: 3, # Turn
+    0: 1,  # Preflop
+    1: 1,  # Preflop
+    2: 1,  # Preflop
+    3: 2,  # Flop
+    4: 3,  # Turn
 }
 STATE_MAPPING: Final[Dict[str, int]] = {
     "folded": 0,
@@ -44,7 +44,6 @@ def extract_features(
         Number of players
         Game ranks
         Game suits
-
     """
     public_cards: np.ndarray = np.zeros(36)
     private_cards: np.ndarray = np.zeros(36)

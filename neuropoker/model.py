@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Final, List, Optional, Tuple
+from typing import Final, List, Optional
 
 import neat
 import neat.parallel
@@ -21,6 +21,7 @@ from neuropoker.player import (
     RandomPlayer,
 )
 
+
 @dataclass
 class NEATEvolution:
     """The result of a NEAT neuroevolution training run."""
@@ -33,8 +34,8 @@ class NEATEvolution:
 def evaluate_genome(
     genome: neat.DefaultGenome,
     config: neat.Config,
+    opponents: List[str],
     seed: Optional[int] = None,
-    opponents: List[str] = [],
 ) -> float:
     """Evaluate a single genome.
 
@@ -43,6 +44,8 @@ def evaluate_genome(
             The genome to evaluate.
         config: neat.Config
             The NEAT configuration.
+        opponents: List[str] | None
+            The list of opponents to play against.
         seed: int | None
             The seed to use for the evaluation.
     """
@@ -75,11 +78,16 @@ def evaluate_genome(
         )
 
         # Play each position 100 times, but with same seeds and hence same cards drawn
-        player_performance = evaluate_performance(player_names, players, seed=seed, num_games=500)[player_name]
-        average_winnings = player_performance["winnings"]/player_performance["num_games"]
+        player_performance = evaluate_performance(
+            player_names, players, seed=seed, num_games=500
+        )[player_name]
+        average_winnings = (
+            player_performance["winnings"] / player_performance["num_games"]
+        )
         f1 += average_winnings
 
     return f1 / 3
+
 
 def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
     """Get the network from the best genome.
@@ -98,6 +106,18 @@ def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
 
 
 def load_player(definition: str, name: str) -> BasePlayer:
+    """Load a player, based on a string definition.
+
+    Parameters:
+        definition: str
+            The player to load, or a path to an evolution file.
+        name: str
+            The name to assign to the player.
+
+    Returns:
+        player: BasePlayer
+            The loaded player.
+    """
     if definition == "RandomPlayer":
         return RandomPlayer()
     if definition == "CallPlayer":
@@ -113,15 +133,17 @@ def load_player(definition: str, name: str) -> BasePlayer:
 
 
 def run_neat(
+    opponents: List[str],
     evolution: Optional[NEATEvolution] = None,
     config_file: Path = Path("config-feedforward.txt"),
     num_generations: int = 50,
     num_cores: int = 1,
-    opponents: List[str] = ["RandomPlayer"],
 ) -> NEATEvolution:
     """Run NEAT neuroevolution to evolve poker players.
 
     Parameters:
+        opponents: List[str]
+            The list of opponents to play against.
         evolution: NEATEvolution | None
             The initial evolution to evolve from, if any.
         config_file: Path
@@ -149,10 +171,12 @@ def run_neat(
         evolution.population if evolution is not None else neat.Population(config)
     )
 
-    for genome_id, genome in population.population.items():
-        genome.fitness = None
+    for _genome_id, genome in population.population.items():
         # Reset fitness values and recompute them.
-        # Since our evaluations are stochastic, this will prevent bad fitness values from being carried over.
+        #
+        # Since our evaluations are stochastic, this will prevent bad
+        # fitness values from being carried over.
+        genome.fitness = None
 
     # Add reporters
     population.add_reporter(neat.StdOutReporter(True))
