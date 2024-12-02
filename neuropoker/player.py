@@ -7,10 +7,26 @@ from typing import Tuple
 import numpy as np
 from pypokerengine.players import BasePokerPlayer
 
-from neuropoker.game import extract_features
+from neuropoker.game_utils import extract_features
 
 
-class RandomPlayer(BasePokerPlayer):
+class BasePlayer(BasePokerPlayer):
+    """Base class for poker players."""
+
+    def declare_action(self, valid_actions, hole_card, round_state):
+        raise NotImplementedError
+
+    def receive_game_start_message(self, game_info):
+        pass
+
+    def receive_round_start_message(self, round_count, hole_card, seats):
+        pass
+
+    def receive_street_start_message(self, street, round_state):
+        pass
+
+
+class RandomPlayer(BasePlayer):
     """A player which takes random actions."""
 
     def declare_action(self, valid_actions, hole_card, round_state):
@@ -23,24 +39,8 @@ class RandomPlayer(BasePokerPlayer):
 
         return action["action"], action["amount"]
 
-    def receive_game_start_message(self, game_info):
-        pass
 
-    def receive_round_start_message(self, round_count, hole_card, seats):
-        pass
-
-    def receive_street_start_message(self, street, round_state):
-        pass
-
-    # TODO: Fix type warning
-    def receive_game_update_message(self, action, round_state):
-        pass
-
-    def receive_round_result_message(self, winners, hand_info, round_state):
-        pass
-
-
-class NEATPlayer(RandomPlayer):
+class NEATPlayer(BasePlayer):
     """A player which uses a NEAT neuro-evolved network to take actions."""
 
     def __init__(self, net, uuid) -> None:
@@ -85,12 +85,12 @@ class NEATPlayer(RandomPlayer):
         raise ValueError(f"Invalid action index: {chosen_action_idx}")
 
 
-class CallPlayer(RandomPlayer):
+class CallPlayer(BasePlayer):
     """A player which always calls."""
 
     def declare_action(self, valid_actions, hole_card, round_state):
         action = valid_actions[1]
-        # print(action['action'])
+        # print(action['action'], action['amount'])
         return action["action"], action["amount"]
 
 

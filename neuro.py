@@ -16,7 +16,6 @@ DEFAULT_CONFIG_FILE: Final[Path] = Path("config-feedforward.txt")
 DEFAULT_NUM_GENERATIONS: Final[int] = 50
 DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 
-
 def get_args() -> argparse.Namespace:
     """Get arguments for the script.
 
@@ -62,8 +61,16 @@ def get_args() -> argparse.Namespace:
             "Number of cores to use for evaluation. " f"(default: {DEFAULT_NUM_CORES})"
         ),
     )
+    parser.add_argument(
+        "-o",
+        "--opponents",
+        nargs='+',
+        default=["CallPlayer"],
+        help=("Name of the opponents from which to sample from"),
+    )
 
     return parser.parse_args()
+
 
 
 def main() -> None:
@@ -81,6 +88,7 @@ def main() -> None:
     print(f"    Config file    : {config_file}")
     print(f"    Generations    : {num_generations}")
     print(f"    Cores          : {num_cores}")
+    print(f"    Opponents     : {args.opponents}")
     print()
 
     # Initialize variables
@@ -110,6 +118,7 @@ def main() -> None:
         config_file=config_file,
         num_generations=num_generations,
         num_cores=num_cores,
+        opponents=args.opponents
     )
 
     # Save model
