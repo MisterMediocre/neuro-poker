@@ -8,12 +8,7 @@ from pypokerengine.api.emulator import Emulator
 from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS
 from neuropoker.player import BasePlayer
-
-# from pypokerengine.api.game import setup_config, start_poker
-# from pypokerengine.engine.player import Player
-# from pypokerengine.engine.poker_constants import PokerConstants as Const
-# from pypokerengine.engine.table import Table
-# from pypokerengine.utils.card_utils import gen_cards
+    
 
 
 class Game:
@@ -107,7 +102,7 @@ class Game:
         initial_state["table"].dealer_btn = dealer_button
 
         game_state, _event = self.emulator.start_new_round(initial_state)
-        game_state, _event = self.emulator.run_until_game_finish(game_state)
+        game_state, _event = self.emulator.run_until_round_finish(game_state)
 
         for j, player in enumerate(game_state["table"].seats.players):
             # print(j, player.name, player.stack - STACK)
