@@ -92,7 +92,6 @@ def gen_deck(seed: Optional[int] = None) -> Deck:
     return Deck(cheat=True, cheat_card_ids=short_card_ids)
 
 
-
 ranks = {"6": 0, "7": 1, "8": 2, "9": 3, "T": 4, "J": 5, "Q": 6, "K": 7, "A": 8}
 suits = {"C": 0, "D": 1, "H": 2, "S": 3}
 street_mapping = {"flop": 1, "turn": 2, "river": 3}
@@ -111,9 +110,8 @@ def card_to_index(card) -> int:
     """
     return ranks[card[1]] + suits[card[0]] * 9
 
+
 state_mapping = {"participating": 1, "folded": 0, "allin": 2}
-
-
 
 
 # TODO: Add state of each player (Folded, all-in etc)
@@ -151,7 +149,9 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
 
     # Dealer position is 0, then 1, then 2 is the guy before the dealer
     dealer_index = round_state["dealer_btn"]
-    rotated_seats = round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
+    rotated_seats = (
+        round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
+    )
 
     player_positions = {p["uuid"]: i for i, p in enumerate(rotated_seats)}
     normalized_position = player_positions[player_uuid] / (NUM_PLAYERS - 1)
@@ -169,9 +169,7 @@ def extract_features(hole_card, round_state, player_uuid) -> np.ndarray:
                     player_bets[street_name][relative_pos] += bet_amount
 
     # Self-state is redundant, but included for consistency
-    player_states = [
-        state_mapping[p["state"]] for p in rotated_seats
-    ]
+    player_states = [state_mapping[p["state"]] for p in rotated_seats]
 
     flattened_bets = np.concatenate(
         [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
