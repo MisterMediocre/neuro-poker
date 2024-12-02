@@ -43,7 +43,6 @@ def extract_features(
         Game ranks
         Game suits
 
-    TODO: Add state of each player (Folded, all-in, etc.)
     """
     public_cards: np.ndarray = np.zeros(36)
     private_cards: np.ndarray = np.zeros(36)

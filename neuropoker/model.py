@@ -12,7 +12,7 @@ from typing import Final, List, Optional, Tuple
 import neat
 import neat.parallel
 
-from neuropoker.game import evaluate_fitness
+from neuropoker.game import evaluate_performance
 from neuropoker.player import (
     BasePlayer,
     CallPlayer,
@@ -64,6 +64,7 @@ def evaluate_genome(
         player_names = [
             f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)
         ]
+        player_name = player_names[player_pos]
 
         players = [BasePlayer()] * 3  # Initialize a list of size 3 with None
         players[player_pos] = NEATPlayer(net, player_names[player_pos])
@@ -74,7 +75,9 @@ def evaluate_genome(
             random.choice(opponents), player_names[opponent_2_pos]
         )
 
-        f1 += evaluate_fitness(player_names, players, seed=seed)[player_pos]
+        player_performance = evaluate_performance(player_names, players, seed=seed)[player_name]
+        f1 += player_performance["winnings"]/player_performance["num_games"]
+
     return f1 / 10
 
 

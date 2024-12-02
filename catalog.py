@@ -4,7 +4,7 @@
 """
 from typing import Dict, Final, List
 
-from neuropoker.game import evaluate_fitness
+from neuropoker.game import PlayerStats, evaluate_performance
 from neuropoker.model import load_player
 from neuropoker.player import BasePlayer
 
@@ -46,19 +46,20 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
 
     print("\n\n")
     print(f"In the competition, the players are: {player_names}")
-    print(f"They will play {num_games} games.")
+    print(f"They play {num_games} games.")
 
     player_models: Final[List[BasePlayer]] = [
         CATALOG[player_name] for player_name in player_names
     ]
 
-    winnings: Final[List[float]] = evaluate_fitness(
-        player_names, player_models, num_games=num_games, seed=1
-    )
+    performances = evaluate_performance(player_names, player_models, num_games)
+    performances: Dict[str, PlayerStats]
 
-    # Print the results
-    for i, player_name in enumerate(player_names):
-        print(f"{player_name}: {winnings[i]}")
+    for player_name, stats in performances.items():
+        print(player_name)
+        print(stats)
+        print("Average winning:", stats["winnings"] / stats["num_games"])
+        print("\n")
 
     print("\n\n")
 
@@ -76,14 +77,14 @@ def main():
 
     # Random is an absolutely horrible player, since he will often
     # raise first and fold later.
-    compete("random", "fold", "call", 30)
+    # compete("random", "fold", "call", 30)
 
     # Expect to match call player's performance, ie average 50
     compete("model_0", "fold", "fold2", 30)
 
     # Expect to win the rounds with good cards, and be conservative
     # with bad cards
-    compete("model_0", "call", "fold", 30)
+    # compete("model_0", "call", "fold", 30)
 
     # compete("call", "call2", "call3", 10)
     # compete("random", "fold", "call", 10)
