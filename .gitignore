@@ -1,4 +1,6 @@
 env
+models/
+plots/
 
 __pycache__/
 *.py[cod]
