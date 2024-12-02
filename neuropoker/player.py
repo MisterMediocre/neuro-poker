@@ -48,6 +48,8 @@ class NEATPlayer(BasePlayer):
         self.uuid = uuid
 
     def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
+        # print(hole_card)
+        # print(round_state["community_card"])
         features = extract_features(hole_card, round_state, self.uuid)
         output = self.net.activate(features)  # Neural network output
         chosen_action_idx = np.argmax(output)
@@ -61,6 +63,7 @@ class NEATPlayer(BasePlayer):
         # 5: raise max
 
         if chosen_action_idx == 0:  # Fold
+            # print(hole_card)
             return "fold", 0
 
         if chosen_action_idx == 1:  # Call
@@ -76,11 +79,12 @@ class NEATPlayer(BasePlayer):
         if chosen_action_idx == 3:  # Raise 2x min
             return "raise", min_raise * 2
 
-        if chosen_action_idx == 4:  # Raise 3x min
+        if chosen_action_idx == 4 or chosen_action_idx == 5:  # Raise 3x min
             return "raise", min_raise * 3
 
-        if chosen_action_idx == 5:  # Raise max
-            return "raise", max_raise  # All-in
+        # if chosen_action_idx == 5:  # Raise max
+            # return "raise", max_raise  # All-in
+            # Makes training unstable
 
         raise ValueError(f"Invalid action index: {chosen_action_idx}")
 
@@ -90,7 +94,6 @@ class CallPlayer(BasePlayer):
 
     def declare_action(self, valid_actions, hole_card, round_state):
         action = valid_actions[1]
-        # print(action['action'], action['amount'])
         return action["action"], action["amount"]
 
 

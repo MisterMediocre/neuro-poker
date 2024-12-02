@@ -114,9 +114,9 @@ def main() -> None:
 
     # Run NEAT
 
-
-    # Save model after every 10 generations
-    batch_size = 10
+    # Save model after every 5 generations
+    # Reset fitness values as well, so that bad history is not carried over
+    batch_size = 5
     num_batches = num_generations // batch_size
 
     for i in range(num_batches):

@@ -92,7 +92,7 @@ def get_deck(cards: List[str] = get_card_list(), seed: Optional[int] = None) -> 
     """
     card_ids: Final[List[int]] = [Card.from_str(s).to_id() for s in cards]
     if seed is not None:
-        # random.seed(seed) # Ignoring the seed as a test
-        random.seed(time.time())
+        # print("Seed used: ", seed)
+        random.seed(seed) # Ignoring the seed as a test
         random.shuffle(card_ids)
     return Deck(cheat=True, cheat_card_ids=card_ids)

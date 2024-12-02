@@ -73,12 +73,11 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
     # print(events)
 
     player_stats = {}
-    for player in game_state["table"].seats.players:
-        player: Player
+    players: List[Player] = game_state["table"].seats.players
+    for player in players:
         default = default_player_stats()
         default["uuid"] = player.uuid
         default["winnings"] = player.stack - STACK
-        default["allin"] = player.pay_info.status == PayInfo.ALLIN
         default["num_games"] = 1
 
         # print(player.action_histories)
@@ -102,6 +101,14 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
                         player_stats[uuid]["big_blinds"] += 1
                     elif action["action"] == "SMALLBLIND":
                         player_stats[uuid]["small_blinds"] += 1
+
+            for p in event["round_state"]["seats"]:
+                p: Dict[str, Any]
+                uuid = p["uuid"]
+                assert uuid in player_stats
+                # all-in
+                if p["state"] == "allin":
+                    player_stats[uuid]["allin"] += 1
 
     return player_stats
 
@@ -259,6 +266,8 @@ class Game:
 
             for player in round_stats:
                 player_stats[player] = merge(player_stats[player], round_stats[player])
+
+            # print("Game", i, "done", round_stats['model_1']['winnings'])
 
             # Merge player stats
             # Update dealer button

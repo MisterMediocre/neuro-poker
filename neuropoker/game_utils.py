@@ -8,10 +8,12 @@ from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_index
 
 NUM_PLAYERS: Final[int] = 3
 
-STREET_MAPPING: Final[Dict[str, int]] = {
-    "flop": 1,
-    "turn": 2,
-    "river": 3,
+STREET_MAPPING: Final[Dict[int, int]] = {
+    0: 1, # Preflop
+    1: 1, # Preflop
+    2: 1, # Preflop
+    3: 2, # Flop
+    4: 3, # Turn
 }
 STATE_MAPPING: Final[Dict[str, int]] = {
     "folded": 0,
@@ -51,12 +53,12 @@ def extract_features(
         street: [0] * NUM_PLAYERS for street in ["preflop", "flop", "turn", "river"]
     }  # Bets per street
 
-    street: Final[str] = round_state["street"]
     community_cards: Final[List[str]] = round_state["community_card"]
 
-    for card in community_cards:
+    # for card in community_cards:
+    for i, card in enumerate(community_cards):
         idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORT_SUITS)
-        public_cards[idx] = STREET_MAPPING[street]
+        public_cards[idx] = STREET_MAPPING[i]
 
     for card in hole_card:
         idx: int = get_card_index(card, ranks=SHORT_RANKS, suits=SHORT_SUITS)
@@ -93,6 +95,7 @@ def extract_features(
     flattened_bets: np.ndarray = np.concatenate(
         [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
     )
+
     features: np.ndarray = np.concatenate(
         [
             public_cards,

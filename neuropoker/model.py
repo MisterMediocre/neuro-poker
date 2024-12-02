@@ -51,12 +51,12 @@ def evaluate_genome(
 
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
-    f1 = 0
-    for i in range(10):
-        # random.seed(seed + i)
-        # Play against some selection of available opponents
+    random.seed(time.time())
+    seed = random.randint(0, 1000)
 
-        player_pos = random.randint(0, 2)
+    f1 = 0
+    for i in range(3):
+        player_pos = i
         opponent_1_pos = (player_pos + 1) % 3
         opponent_2_pos = (player_pos + 2) % 3
 
@@ -74,29 +74,12 @@ def evaluate_genome(
             random.choice(opponents), player_names[opponent_2_pos]
         )
 
-        player_performance = evaluate_performance(player_names, players, seed=i, num_games=30)[player_name]
+        # Play each position 100 times, but with same seeds and hence same cards drawn
+        player_performance = evaluate_performance(player_names, players, seed=seed, num_games=500)[player_name]
         average_winnings = player_performance["winnings"]/player_performance["num_games"]
         f1 += average_winnings
 
-    return f1 / 10
-
-
-def eval_genomes(
-    genomes: List[Tuple[int, neat.DefaultGenome]], config: neat.Config
-) -> None:
-    """Evaluate the fitness for a list of genomes.
-
-    Parameters:
-        genomes: List[Tuple[int, neat.DefaultGenome]]
-            The genomes to evaluate.
-        config: neat.Config
-            The NEAT configuration.
-    """
-    seed = random.randint(0, 1000)
-    for genome_id, genome in genomes:
-        # TODO: Fix type warning
-        genome.fitness = evaluate_genome(genome, config, seed)  # type: ignore
-
+    return f1 / 3
 
 def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
     """Get the network from the best genome.
@@ -165,6 +148,11 @@ def run_neat(
     population: neat.Population = (
         evolution.population if evolution is not None else neat.Population(config)
     )
+
+    for genome_id, genome in population.population.items():
+        genome.fitness = None
+        # Reset fitness values and recompute them.
+        # Since our evaluations are stochastic, this will prevent bad fitness values from being carried over.
 
     # Add reporters
     population.add_reporter(neat.StdOutReporter(True))
