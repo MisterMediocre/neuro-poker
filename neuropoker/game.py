@@ -233,7 +233,7 @@ def evaluate_fitness(
         game_state, _ = emulator.run_until_round_finish(game_state)  # game_state, events
 
         for j, player in enumerate(game_state["table"].seats.players):
-            print(j, player.name, player.stack - STACK)
+            # print(j, player.name, player.stack - STACK)
             sum_winnings[j] += player.stack - STACK
 
         dealer_btn = (dealer_btn + 1) % NUM_PLAYERS
