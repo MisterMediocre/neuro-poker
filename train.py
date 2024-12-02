@@ -113,19 +113,26 @@ def main() -> None:
         print(f"Running until generation {num_generations}...")
 
     # Run NEAT
-    evolution = run_neat(
-        evolution,
-        config_file=config_file,
-        num_generations=num_generations,
-        num_cores=num_cores,
-        opponents=args.opponents
-    )
 
-    # Save model
-    with evolution_file.open("wb") as ef:
-        pickle.dump(evolution, ef)
-        print(f"Saved evolution at {evolution_file}")
 
+    # Save model after every 10 generations
+    batch_size = 10
+    num_batches = num_generations // batch_size
+
+    for i in range(num_batches):
+        print(f"Running batch {i+1}/{num_batches}")
+        evolution = run_neat(
+            evolution,
+            config_file=config_file,
+            num_generations=batch_size,
+            num_cores=num_cores,
+            opponents=args.opponents
+        )
+
+        # Save model
+        with evolution_file.open("wb") as ef:
+            pickle.dump(evolution, ef)
+            print(f"Saved evolution at {evolution_file}")
 
 if __name__ == "__main__":
     main()

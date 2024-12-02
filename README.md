@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 ## Usage
 ```bash
-python neuro.py # To train the agents
+python train.py # To train the agents
 python catalog.py # To play the agents against each other
 ```
 
@@ -29,10 +29,9 @@ python catalog.py # To play the agents against each other
 5. "model\_1": Evolved to beat 2x CallPlayers
 
 
-
 ```bash
-python neuro.py -g 50 -o FoldPlayer -f "models/model_0.pkl" -c 10
-python neuro.py -g 50 -o CallPlayer -f "models/model_1.pkl" -c 10
+python train.py -g 50 -o FoldPlayer -f "models/model_0.pkl" -c 10
+python train.py -g 50 -o CallPlayer -f "models/model_1.pkl" -c 10
 ```
 
 TODO: Add more models

@@ -21,7 +21,6 @@ from neuropoker.player import (
     RandomPlayer,
 )
 
-
 @dataclass
 class NEATEvolution:
     """The result of a NEAT neuroevolution training run."""
@@ -35,7 +34,7 @@ def evaluate_genome(
     genome: neat.DefaultGenome,
     config: neat.Config,
     seed: Optional[int] = None,
-    opponents: List[str] = ["RandomPlayer"],
+    opponents: List[str] = [],
 ) -> float:
     """Evaluate a single genome.
 
@@ -48,13 +47,13 @@ def evaluate_genome(
             The seed to use for the evaluation.
     """
 
-    if seed is None:
-        random.seed(time.time())
-        seed = random.randint(0, 1000)
+    assert len(opponents) > 0, "At least one opponent must be provided"
+
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     f1 = 0
     for i in range(10):
+        # random.seed(seed + i)
         # Play against some selection of available opponents
 
         player_pos = random.randint(0, 2)
@@ -75,8 +74,9 @@ def evaluate_genome(
             random.choice(opponents), player_names[opponent_2_pos]
         )
 
-        player_performance = evaluate_performance(player_names, players, seed=seed)[player_name]
-        f1 += player_performance["winnings"]/player_performance["num_games"]
+        player_performance = evaluate_performance(player_names, players, seed=i, num_games=30)[player_name]
+        average_winnings = player_performance["winnings"]/player_performance["num_games"]
+        f1 += average_winnings
 
     return f1 / 10
 

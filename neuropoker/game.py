@@ -148,7 +148,6 @@ class Game:
         cards: List[str] = get_card_list(),
         max_rounds: int = 1,
         small_blind_amount: int = SMALL_BLIND_AMOUNT,
-        big_blind_amount: int = BIG_BLIND_AMOUNT,
         stack: int = STACK,
     ) -> None:
         """Initialize the game.
@@ -182,7 +181,6 @@ class Game:
         self.cards: Final[List[str]] = cards
         self.max_rounds: Final[int] = max_rounds
         self.small_blind_amount: Final[int] = small_blind_amount
-        self.big_blind_amount: Final[int] = big_blind_amount
         self.stack: Final[int] = stack
 
         # Confiugre poker emulator
@@ -191,7 +189,7 @@ class Game:
             len(self.players),
             self.max_rounds,
             self.small_blind_amount,
-            self.big_blind_amount,
+            0, # NO ANTE
         )
         for name, model in self.players.items():
             self.emulator.register_player(name, model)
@@ -230,12 +228,6 @@ class Game:
 
         game_state, _event = self.emulator.start_new_round(initial_state)
         game_state, events = self.emulator.run_until_round_finish(game_state)
-
-
-        for j, player in enumerate(game_state["table"].seats.players):
-            # print(j, player.name, player.stack - STACK)
-            winnings[j] = player.stack - self.stack
-
 
         return read_game(game_state, events)
 
