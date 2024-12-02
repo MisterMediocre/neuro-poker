@@ -12,7 +12,7 @@ from typing import Final, List
 from neuropoker.model import NEATEvolution, run_neat
 
 DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
-DEFAULT_CONFIG_FILE: Final[Path] = Path("config-feedforward.txt")
+DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat")
 DEFAULT_NUM_GENERATIONS: Final[int] = 50
 DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 DEFAULT_BATCH_SIZE: Final[int] = 5

@@ -6,13 +6,12 @@ from typing import Any, Dict, Final, List, TypedDict
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
 
-from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list, get_deck
+from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS
 from neuropoker.player.base import BasePlayer
 
 SMALL_BLIND_AMOUNT: Final[int] = 25
 BIG_BLIND_AMOUNT: Final[int] = 50
-STACK: Final[int] = 1000
 
 
 class PlayerStats(TypedDict):
@@ -181,7 +180,7 @@ class Game:
         self,
         player_names: List[str],
         player_models: List[BasePlayer],
-        cards: List[str] = get_card_list(),
+        cards: List[str] = [],
         max_rounds: int = 1,
         small_blind_amount: int = SMALL_BLIND_AMOUNT,
         stack: int = STACK,
@@ -206,6 +205,7 @@ class Game:
         """
         assert len(player_names) == len(player_models)
         assert len(player_names) == NUM_PLAYERS
+        assert len(cards) > 0
 
         self.players: Final[Dict[str, BasePlayer]] = {
             name: model for name, model in zip(player_names, player_models)
@@ -338,7 +338,7 @@ def evaluate_performance(
 
     # Create card list
     # Use a short deck
-    cards: Final[List[str]] = get_card_list(ranks=SHORT_RANKS, suits=SHORT_SUITS)
+    cards: Final[List[str]] = get_card_list(ranks=SHORT_RANKS, suits=SHORTER_SUITS)
 
     # Create game
     game: Final[Game] = Game(player_names, player_models, cards=cards)

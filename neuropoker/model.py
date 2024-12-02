@@ -67,7 +67,7 @@ def evaluate_genome(
         player_name = player_names[player_pos]
 
         players = [BasePlayer()] * 3  # Initialize a list of size 3 with None
-        players[player_pos] = NEATPlayer(net, player_names[player_pos])
+        players[player_pos] = NEATPlayer(net, player_names[player_pos], training=True)
         players[opponent_1_pos] = load_player(
             random.choice(opponents), player_names[opponent_1_pos]
         )
@@ -75,9 +75,9 @@ def evaluate_genome(
             random.choice(opponents), player_names[opponent_2_pos]
         )
 
-        # Play each position 100 times, but with same seeds and hence same cards drawn
+        # Play each position 400 times, but with same seeds and hence same cards drawn
         player_performance = evaluate_performance(
-            player_names, players, seed=seed, num_games=500
+            player_names, players, seed=seed, num_games=400
         )[player_name]
         average_winnings = (
             player_performance["winnings"] / player_performance["num_games"]
@@ -111,6 +111,8 @@ def load_player(definition: str, name: str) -> BasePlayer:
             The player to load, or a path to an evolution file.
         name: str
             The name to assign to the player.
+        training: bool
+            Whether the player is training.
 
     Returns:
         player: BasePlayer
@@ -127,7 +129,7 @@ def load_player(definition: str, name: str) -> BasePlayer:
     with open(definition, "rb") as f:
         evolution = pickle.load(f)
         net = get_network(evolution)
-        return NEATPlayer(net, name)
+        return NEATPlayer(net, name, training=False)
 
 
 def run_neat(

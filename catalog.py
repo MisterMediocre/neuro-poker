@@ -3,6 +3,8 @@
 """Run a catalog of poker games with different players.
 """
 from typing import Dict, Final, List
+import random
+import time
 
 from neuropoker.game import (
     PlayerStats,
@@ -26,12 +28,11 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
     "call": load_player("CallPlayer", "call"),
     "call2": load_player("CallPlayer", "call2"),
     "call3": load_player("CallPlayer", "call3"),
-    # model_0 has been trained against the fold player
-    "model_0": load_player("models/model_0.pkl", "model_0"),
-    "model_0_2": load_player("models/model_0.pkl", "model_0_2"),
-    # model_1 has been trained against the call player
-    "model_1": load_player("models/model_1.pkl", "model_1"),
-    "model_1_2": load_player("models/model_1.pkl", "model_1_2"),
+    # model_0 has been trained against the fold player, for playing 4-suit 3-player
+    "model_0": load_player("models/3p_4s/model_0.pkl", "model_0"),
+    # model_1 has been trained against the call player, for playing 4-suit 3-player
+    # "model_1": load_player("models/3p_4s/model_1.pkl", "model_1"),
+    "model_1": load_player("models/3p_3s/model_0.pkl", "model_1"),
 }
 
 
@@ -66,13 +67,16 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
         default["uuid"] = player_names[i]
         performances[player_names[i]] = default
 
+
+    random.seed(time.time())
+    seed = random.randint(0, 1000)
     for i in range(0, 3):
         # Shift the players to the left
         player_names_i = player_names[i:] + player_names[:i]
         player_models_i = player_models[i:] + player_models[:i]
 
         performance = evaluate_performance(
-            player_names_i, player_models_i, num_games, seed=1
+            player_names_i, player_models_i, num_games, seed=seed
         )
         for player_name, stats in performance.items():
             performances[player_name] = merge(performances[player_name], stats)
@@ -113,7 +117,6 @@ def main():
 
     # Expect the model to fully exploit the call players
     compete("call", "call2", "call3", 100)
-    compete("model_1", "call", "call2", 500)
     compete("model_1", "call", "call2", 500)
 
     # Expect the models to tie, while taking advantage of the fold player

@@ -7,16 +7,36 @@ import numpy as np
 
 from neuropoker.game_utils import extract_features
 from neuropoker.player.base import BasePlayer
+from neuropoker.player.naive import RandomPlayer
 
 
 class NEATPlayer(BasePlayer):
     """A player which uses a NEAT neuro-evolved network to take actions."""
 
-    def __init__(self, net, uuid) -> None:
+    def __init__(self, net, uuid, training=False) -> None:
+        self.training = training
         self.net = net
         self.uuid = uuid
 
     def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
+
+        random_player = RandomPlayer()
+
+        ## Bootstrap the model by ensuring it sees a variety of situations
+        if self.training:
+            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.30:
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
+            if len(round_state["community_card"]) == 3 and np.random.rand() < 0.2:
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
+            if len(round_state["community_card"]) == 4 and np.random.rand() < 0.15:
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
+
         # print(hole_card)
         # print(round_state["community_card"])
         features = extract_features(hole_card, round_state, self.uuid)
