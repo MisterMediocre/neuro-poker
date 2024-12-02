@@ -7,15 +7,17 @@ import time
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Final, List, Optional
+from typing import Final, List, Optional, Tuple, Union
 
 import neat
 import neat.parallel
+from pureples.hyperneat.hyperneat import create_phenotype_network
+from pureples.shared.substrate import Substrate
 
 from neuropoker.game import evaluate_performance
-from neuropoker.players.base import BasePlayer
-from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.players.neat import NEATPlayer
+from neuropoker.player.base import BasePlayer
+from neuropoker.player.naive import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.player.neat import NEATPlayer
 
 
 @dataclass
@@ -192,3 +194,77 @@ def run_neat(
 
     # print("Best genome:", winner)
     return NEATEvolution(population, stats, winner)
+
+
+DEFAULT_HIDDEN_SIZES: List[int] = [64, 64]
+CoordinateList = List[Tuple[float, float]]
+
+
+def run_hyperneat(
+    opponents: List[str],
+    evolution: Optional[NEATEvolution] = None,
+    hidden_sizes: Optional[Union[int, List[int]]] = None,
+    config_file: Path = Path("config-feedforward.txt"),
+    num_generations: int = 50,
+    num_cores: int = 1,
+) -> NEATEvolution:
+    """Run HyperNEAT neuroevolution to evolve poker players.
+
+    Parameters:
+        opponents: List[str]
+            The list of opponents to play against.
+        evolution: NEATEvolution | None
+            The initial evolution to evolve from, if any.
+        hidden_sizes: int | List[int] | None
+            The sizes of each hidden layer.
+        config_file: Path
+            The path to the NEAT configuration file.
+        num_generations: int
+            The number of generations to run.
+        num_cores: int
+            The number of cores to use in parallel.
+    """
+    # Get list of hidden sizes
+    hidden_sizes_: List[int]
+    match hidden_sizes:
+        case int():
+            hidden_sizes_ = [hidden_sizes]
+        case list():
+            hidden_sizes_ = hidden_sizes
+        case _:
+            hidden_sizes_ = DEFAULT_HIDDEN_SIZES
+
+    # TODO: Don't hardcode input and output dimensionality
+    input_dims: Final[int] = 80  # Number of features
+    output_dims: Final[int] = 6  # Number of actions
+
+    # Input coordinates
+    #
+    # TODO: Are these coordinates reasonable? I used them for HW2
+    # but we may want something different for our poker features.
+    #
+    # Evenly spaced between (0, 0) and (0, 1)
+    input_coordinates: Final[CoordinateList] = [
+        (0.0, i / input_dims) for i in range(input_dims)
+    ]
+
+    # Output coordinates
+    #
+    # Evenly spaced between (0, 0) and (0, 1)
+    output_coordinates: Final[CoordinateList] = [
+        (0.0, i / output_dims) for i in range(output_dims)
+    ]
+
+    # Hidden coordinates
+    #
+    # For each layer, evenly spaced between (0, 0) and (0, 1)
+    hidden_coordinates: Final[List[CoordinateList]] = [
+        [(0.0, i / size) for i in range(size)] for size in hidden_sizes_
+    ]
+
+    activations: Final[int] = len(hidden_sizes_) + 2
+    substrate: Final[Substrate] = Substrate(
+        input_coordinates,
+        output_coordinates,
+        hidden_coordinates,
+    )
