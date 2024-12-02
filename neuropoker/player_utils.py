@@ -2,9 +2,9 @@
 
 import pickle
 
-from neuropoker.player.base import BasePlayer
-from neuropoker.player.naive import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.player.neat import NEATPlayer
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat import NEATPlayer
 
 
 def load_player(definition: str, name: str) -> BasePlayer:

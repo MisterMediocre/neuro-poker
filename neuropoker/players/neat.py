@@ -6,8 +6,8 @@ from typing import Tuple
 import numpy as np
 
 from neuropoker.game_utils import extract_features
-from neuropoker.player.base import BasePlayer
-from neuropoker.player.naive import RandomPlayer
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import RandomPlayer
 
 
 class NEATPlayer(BasePlayer):

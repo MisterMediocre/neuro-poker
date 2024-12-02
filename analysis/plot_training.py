@@ -14,7 +14,7 @@ import numpy as np
 
 # Import neuropoker
 sys.path.append(os.getcwd())
-from neuropoker.model import NEATEvolution
+from neuropoker.models.neat import NEATEvolution
 
 
 def get_args() -> argparse.Namespace:

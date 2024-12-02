@@ -3,7 +3,7 @@
 
 import random
 
-from neuropoker.player.base import BasePlayer
+from neuropoker.players.base import BasePlayer
 
 
 class RandomPlayer(BasePlayer):
@@ -11,14 +11,14 @@ class RandomPlayer(BasePlayer):
 
     def declare_action(self, valid_actions, hole_card, round_state):
         """Declare an action, which is selected at random."""
-        valid_actions.pop(0) # Never fold
+        valid_actions.pop(0)  # Never fold
 
         action = random.choice(valid_actions)
 
         if action["action"] == "raise":
             # Some multiples of min
             multiple = random.choice([1, 2, 3])
-            return action["action"], multiple*action["amount"]["min"]
+            return action["action"], multiple * action["amount"]["min"]
 
         return action["action"], action["amount"]
 

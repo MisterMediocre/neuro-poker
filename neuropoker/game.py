@@ -8,10 +8,12 @@ from pypokerengine.engine.player import Player
 
 from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS
-from neuropoker.player.base import BasePlayer
+from neuropoker.players.base import BasePlayer
 
+# TODO: Un-hardcode these constants
 SMALL_BLIND_AMOUNT: Final[int] = 25
 BIG_BLIND_AMOUNT: Final[int] = 50
+STACK: Final[int] = 1000
 
 
 class PlayerStats(TypedDict):
