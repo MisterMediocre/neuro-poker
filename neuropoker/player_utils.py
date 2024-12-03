@@ -2,6 +2,7 @@
 
 import pickle
 
+from neuropoker.models.neat import get_network
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
 from neuropoker.players.neat import NEATPlayer

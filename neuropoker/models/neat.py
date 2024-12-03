@@ -6,10 +6,20 @@ import time
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Final, List, Optional
+from typing import Final, List, Optional, Union
 
-import neat
-import neat.parallel
+from neat import (
+    Config,
+    DefaultGenome,
+    DefaultReproduction,
+    DefaultSpeciesSet,
+    DefaultStagnation,
+    Population,
+    StatisticsReporter,
+    StdOutReporter,
+)
+from neat.nn import FeedForwardNetwork, RecurrentNetwork
+from neat.parallel import ParallelEvaluator
 
 from neuropoker.game import evaluate_performance
 from neuropoker.models.base import BaseModel
@@ -17,17 +27,19 @@ from neuropoker.player_utils import load_player
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.neat import NEATPlayer
 
+NEATNetwork = Union[FeedForwardNetwork, RecurrentNetwork]
+
 
 @dataclass
 class NEATEvolution:
     """The result of a NEAT neuroevolution training run."""
 
-    population: neat.Population
-    stats: neat.StatisticsReporter
-    best_genome: neat.DefaultGenome
+    population: Population
+    stats: StatisticsReporter
+    best_genome: DefaultGenome
 
 
-def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
+def get_network(evolution: NEATEvolution) -> NEATNetwork:
     """Get the network from the best genome.
 
     Parameters:
@@ -35,12 +47,14 @@ def get_network(evolution: NEATEvolution) -> neat.nn.FeedForwardNetwork:
             The evolution to get the network from.
 
     Returns:
-        net: neat.nn.FeedForwardNetwork
+        net: NEATNetwork
             The network.
+
+    NOTE: Assumes this is a NEAT model, not a HyperNEAT / ES-HyperNEAT model.
+
+    TODO: Write this in a more extensible way.
     """
-    return neat.nn.FeedForwardNetwork.create(
-        evolution.best_genome, evolution.population.config
-    )
+    return FeedForwardNetwork.create(evolution.best_genome, evolution.population.config)
 
 
 class NEATModel(BaseModel):
@@ -64,19 +78,17 @@ class NEATModel(BaseModel):
                 The number of cores to use in parallel.
         """
         # Load NEAT config
-        self.config: Final[neat.Config] = neat.Config(
-            neat.DefaultGenome,
-            neat.DefaultReproduction,
-            neat.DefaultSpeciesSet,
-            neat.DefaultStagnation,
+        self.config: Final[Config] = Config(
+            DefaultGenome,
+            DefaultReproduction,
+            DefaultSpeciesSet,
+            DefaultStagnation,
             config_file,
         )
 
         # Get or create population
-        self.population: Final[neat.Population] = (
-            evolution.population
-            if evolution is not None
-            else neat.Population(self.config)
+        self.population: Final[Population] = (
+            evolution.population if evolution is not None else Population(self.config)
         )
 
         # Reset fitness values and recompute them.
@@ -87,12 +99,12 @@ class NEATModel(BaseModel):
             genome.fitness = None
 
         # Add reporters
-        self.stats: Final[neat.StatisticsReporter] = neat.StatisticsReporter()
+        self.stats: Final[StatisticsReporter] = StatisticsReporter()
 
-        self.population.add_reporter(neat.StdOutReporter(True))
+        self.population.add_reporter(StdOutReporter(True))
         self.population.add_reporter(self.stats)
 
-    def get_network(self, genome: neat.DefaultGenome) -> neat.nn.FeedForwardNetwork:
+    def get_network(self, genome: neat.DefaultGenome) -> NEATNetwork:
         """Get the network from a genome.
 
         Parameters:
@@ -100,24 +112,24 @@ class NEATModel(BaseModel):
                 The genome to get the network from.
 
         Returns:
-            net: neat.nn.FeedForwardNetwork
+            net: NEATNetwork
                 The network.
         """
-        return neat.nn.FeedForwardNetwork.create(genome, self.config)
+        return FeedForwardNetwork.create(genome, self.config)
 
     def evaluate_genome(
         self,
-        genome: neat.DefaultGenome,
-        config: neat.Config,
+        genome: DefaultGenome,
+        _config: Config,
         opponents: List[str],
         seed: Optional[int] = None,
     ) -> float:
         """Evaluate a single genome.
 
         Parameters:
-            genome: neat.DefaultGenome
+            genome: DefaultGenome
                 The genome to evaluate.
-            config: neat.Config
+            config: Config
                 The NEAT configuration.
             opponents: List[str] | None
                 The list of opponents to play against.
@@ -168,7 +180,7 @@ class NEATModel(BaseModel):
         opponents: List[str],
         num_generations: int = 50,
         num_cores: int = 1,
-    ) -> neat.DefaultGenome:
+    ) -> DefaultGenome:
         """Run evolutionary training to evolve poker players.
 
         Parameters:
@@ -180,16 +192,16 @@ class NEATModel(BaseModel):
                 The number of cores to use in parallel.
 
         Returns:
-            winner: neat.DefaultGenome
+            winner: DefaultGenome
                 The winning genome.
         """
         curried_evaluate_genome = partial(self.evaluate_genome, opponents=opponents)
 
-        evaluator: Final[neat.ParallelEvaluator] = neat.parallel.ParallelEvaluator(
+        evaluator: Final[ParallelEvaluator] = ParallelEvaluator(
             num_cores, curried_evaluate_genome
         )
 
-        winner: Final[neat.DefaultGenome] = self.population.run(  # type: ignore
+        winner: Final[DefaultGenome] = self.population.run(  # type: ignore
             evaluator.evaluate, n=num_generations
         )
 
