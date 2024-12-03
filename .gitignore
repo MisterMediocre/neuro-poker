@@ -1,5 +1,6 @@
 env
 models/
+!neuropoker/models
 plots/
 
 __pycache__/

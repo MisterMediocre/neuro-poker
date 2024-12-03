@@ -9,7 +9,7 @@ import pickle
 from pathlib import Path
 from typing import Final, List
 
-from neuropoker.model import NEATEvolution, run_neat
+from neuropoker.models.neat import NEATEvolution, NEATModel
 
 DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat")
@@ -132,12 +132,17 @@ def main() -> None:
 
     for i in range(num_batches):
         print(f"Running batch {i+1}/{num_batches}")
-        evolution = run_neat(
-            opponents,
+        model = NEATModel(
             evolution=evolution,
             config_file=config_file,
+        )
+        winner = model.run(
+            opponents=opponents,
             num_generations=batch_size,
             num_cores=num_cores,
+        )
+        evolution = NEATEvolution(
+            population=model.population, stats=model.stats, best_genome=winner
         )
 
         # Save model

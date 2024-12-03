@@ -12,8 +12,8 @@ from neuropoker.game import (
     evaluate_performance,
     merge,
 )
-from neuropoker.model import load_player
-from neuropoker.players.base import BasePlayer
+from neuropoker.player.base import BasePlayer
+from neuropoker.player_utils import load_player
 
 CATALOG: Final[Dict[str, BasePlayer]] = {
     # Random players

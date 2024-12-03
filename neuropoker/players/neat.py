@@ -6,8 +6,8 @@ from typing import Tuple
 import numpy as np
 
 from neuropoker.game_utils import extract_features
-from neuropoker.players.naive import RandomPlayer
 from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import RandomPlayer
 
 
 class NEATPlayer(BasePlayer):
@@ -25,11 +25,17 @@ class NEATPlayer(BasePlayer):
         ## Bootstrap the model by ensuring it sees a variety of situations
         if self.training:
             if len(round_state["community_card"]) == 0 and np.random.rand() < 0.30:
-                return random_player.declare_action(valid_actions, hole_card, round_state)
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
             if len(round_state["community_card"]) == 3 and np.random.rand() < 0.2:
-                return random_player.declare_action(valid_actions, hole_card, round_state)
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
             if len(round_state["community_card"]) == 4 and np.random.rand() < 0.15:
-                return random_player.declare_action(valid_actions, hole_card, round_state)
+                return random_player.declare_action(
+                    valid_actions, hole_card, round_state
+                )
 
         # print(hole_card)
         # print(round_state["community_card"])
