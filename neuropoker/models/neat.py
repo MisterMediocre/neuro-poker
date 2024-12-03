@@ -104,11 +104,11 @@ class NEATModel(BaseModel):
         self.population.add_reporter(StdOutReporter(True))
         self.population.add_reporter(self.stats)
 
-    def get_network(self, genome: neat.DefaultGenome) -> NEATNetwork:
+    def get_network(self, genome: DefaultGenome) -> NEATNetwork:
         """Get the network from a genome.
 
         Parameters:
-            genome: neat.DefaultGenome
+            genome: DefaultGenome
                 The genome to get the network from.
 
         Returns:
