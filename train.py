@@ -9,7 +9,7 @@ import pickle
 from pathlib import Path
 from typing import Final, List
 
-from neuropoker.models.neat import NEATEvolution, NEATModel
+from neuropoker.models.neat_model import NEATEvolution, NEATModel
 
 DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat")

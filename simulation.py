@@ -6,7 +6,7 @@ TODO: Fill out script, add more options, etc.
 """
 
 from neuropoker.game import evaluate_performance
-from neuropoker.player.naive import CallPlayer, RandomPlayer
+from neuropoker.players.naive_player import CallPlayer, RandomPlayer
 
 
 def main() -> None:

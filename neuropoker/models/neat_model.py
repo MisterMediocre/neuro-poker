@@ -22,10 +22,10 @@ from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from neat.parallel import ParallelEvaluator
 
 from neuropoker.game import evaluate_performance
-from neuropoker.models.base import BaseModel
+from neuropoker.models.base_model import BaseModel
 from neuropoker.player_utils import load_player
-from neuropoker.players.base import BasePlayer
-from neuropoker.players.neat import NEATPlayer
+from neuropoker.players.base_player import BasePlayer
+from neuropoker.players.neat_player import NEATPlayer
 
 NEATNetwork = Union[FeedForwardNetwork, RecurrentNetwork]
 

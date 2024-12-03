@@ -3,7 +3,7 @@
 
 import random
 
-from neuropoker.players.base import BasePlayer
+from neuropoker.players.base_player import BasePlayer
 
 
 class RandomPlayer(BasePlayer):

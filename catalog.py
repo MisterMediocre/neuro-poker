@@ -2,9 +2,9 @@
 
 """Run a catalog of poker games with different players.
 """
-from typing import Dict, Final, List
 import random
 import time
+from typing import Dict, Final, List
 
 from neuropoker.game import (
     PlayerStats,
@@ -12,8 +12,8 @@ from neuropoker.game import (
     evaluate_performance,
     merge,
 )
-from neuropoker.player.base import BasePlayer
 from neuropoker.player_utils import load_player
+from neuropoker.players.base_player import BasePlayer
 
 CATALOG: Final[Dict[str, BasePlayer]] = {
     # Random players
@@ -66,7 +66,6 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
         default = default_player_stats()
         default["uuid"] = player_names[i]
         performances[player_names[i]] = default
-
 
     random.seed(time.time())
     seed = random.randint(0, 1000)

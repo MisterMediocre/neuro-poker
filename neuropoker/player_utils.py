@@ -2,10 +2,10 @@
 
 import pickle
 
-from neuropoker.models.neat import get_network
-from neuropoker.players.base import BasePlayer
-from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.players.neat import NEATPlayer
+from neuropoker.models.neat_model import get_network
+from neuropoker.players.base_player import BasePlayer
+from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat_player import NEATPlayer
 
 
 def load_player(definition: str, name: str) -> BasePlayer:
