@@ -20,7 +20,7 @@ from neuropoker.models.neat_model import NEATModel
 from neuropoker.player_utils import load_player, player_type_from_string
 from neuropoker.players.base_player import BasePlayer
 
-DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
+DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_4s_neat.toml")
 DEFAULT_MODEL_FILE: Final[Path] = Path("models/neat_poker.pkl")
 DEFAULT_NUM_GENERATIONS: Final[int] = 50
 DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1

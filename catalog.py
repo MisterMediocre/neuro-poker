@@ -6,14 +6,8 @@ import random
 import time
 from typing import Dict, Final, List
 
-from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_list
 from neuropoker.config import Config
-from neuropoker.game import (
-    PlayerStats,
-    default_player_stats,
-    evaluate_performance,
-    merge,
-)
+from neuropoker.game import Game, PlayerStats, default_player_stats, merge
 from neuropoker.player_utils import load_player
 from neuropoker.players.base_player import BasePlayer
 from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
@@ -43,30 +37,34 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
 
 
 def compete(
-    player_1: str, player_2: str, player_3: str, config: Config, num_games: int = 100
+    player_names: List[str],
+    config: Config,
+    num_games: int = 100,
 ) -> None:
     """Run a multi-player poker game.
 
     Parameters:
-        player_1: str
-            The name of the first player, from the catalog.
-        player_2: str
-            The name of the second player, from the catalog.
-        player_3: str
-            The name of the third player, from the catalog.
+        player_names: List[str]
+            The name of each player, taken from the catalog.
         config: Config
             The game configuration.
         num_games: int
             The number of games to play.
     """
 
-    player_names: Final[List[str]] = [player_1, player_2, player_3]
+    if len(player_names) != config["game"]["players"]:
+        raise ValueError(
+            "The number of players in the game configuration "
+            f"({config['game']['players']})"
+            "does not match the number of players provided "
+            f"({len(player_names)})"
+        )
 
     print("\n\n")
     print(f"In the competition, the players are: {player_names}")
     print(f"They play {num_games} games from each position.")
 
-    player_models: Final[List[BasePlayer]] = [
+    players: Final[List[BasePlayer]] = [
         CATALOG[player_name] for player_name in player_names
     ]
 
@@ -80,15 +78,17 @@ def compete(
     random.seed(time.time())
     seed = random.randint(0, 1000)
 
-    for i in range(0, 3):
-        # Shift the players to the left
-        player_models_i: List[BasePlayer] = player_models[i:] + player_models[:i]
+    for i in range(0, len(players)):
+        # Shift the players
+        players_: List[BasePlayer] = players[i:] + players[:i]
 
-        performance = evaluate_performance(
-            player_models_i, config, num_games=num_games, seed=seed
+        # Run the game
+        game: Game = Game.from_config(players_, config)
+        game_stats: Dict[str, PlayerStats] = game.play_multiple(
+            num_games=num_games, seed=seed
         )
 
-        for player_name, stats in performance.items():
+        for player_name, stats in game_stats.items():
             performances[player_name] = merge(performances[player_name], stats)
 
     for player_name, stats in performances.items():
@@ -108,12 +108,12 @@ def main():
     # 3 fold:
     # Expect each player to win 0 on average
     print("~~~ 3 fold ~~~")
-    compete("fold", "fold2", "fold3", config)
+    compete(["fold", "fold2", "fold3"], config)
 
     # 3 call:
     # Expect each player to win 0 on average
     print("~~~ 3 call ~~~")
-    compete("call", "call2", "call3", config)
+    compete(["call", "call2", "call3"], config)
 
     # 1 call + 2 fold:
     #
@@ -122,7 +122,7 @@ def main():
     # - When big blind, will win 25
     # - When neither, will win 75
     print("~~~ 1 call + 2 fold ~~~")
-    compete("call", "fold", "fold2", config)
+    compete(["call", "fold", "fold2"], config)
 
     # 2 call + 1 fold:
     #
@@ -130,7 +130,7 @@ def main():
     # - Each caller wins ~12.5 per game
     # - The fold player loses ~25.0 per game
     print("~~~ 2 call + 1 fold ~~~")
-    compete("call", "call2", "fold", config)
+    compete(["call", "call2", "fold"], config)
 
     # Expect to match call player's performance, ie average 50
     # Success

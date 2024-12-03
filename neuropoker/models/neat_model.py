@@ -22,7 +22,7 @@ from neat.parallel import ParallelEvaluator
 from termcolor import colored
 
 from neuropoker.config import Config as NeuropokerConfig
-from neuropoker.game import PlayerStats, evaluate_performance
+from neuropoker.game import Game, PlayerStats
 from neuropoker.models.base_model import BaseModel
 from neuropoker.players.base_player import BasePlayer
 from neuropoker.players.neat_player import NEATNetwork, NEATPlayer
@@ -174,8 +174,8 @@ class NEATModel(BaseModel):
             player_dict: Dict[int, BasePlayer] = {}
             player_dict[player_pos] = NEATPlayer("player", net, training=False)
 
+            # Randomly sample opponents from the opponents list
             opponent_1_index, opponent_2_index = random.sample(range(len(opponents)), 2)
-
             player_dict[opponent_1_pos] = opponents[opponent_1_index]
             player_dict[opponent_2_pos] = opponents[opponent_2_index]
 
@@ -187,14 +187,13 @@ class NEATModel(BaseModel):
             # Convert to sorted list
             players: List[BasePlayer] = [player_dict[i] for i in range(3)]
 
-            # Play each position 100 times, but with same seeds and hence same cards drawn
-            player_performances: Dict[str, PlayerStats] = evaluate_performance(
-                players, neuropoker_config, num_games=num_games, seed=seed
+            game: Game = Game.from_config(players, neuropoker_config)
+            game_stats: Dict[str, PlayerStats] = game.play_multiple(
+                num_games=num_games, seed=seed
             )
 
             our_average_winnings: float = (
-                player_performances["player"]["winnings"]
-                / player_performances["player"]["num_games"]
+                game_stats["player"]["winnings"] / game_stats["player"]["num_games"]
             )
 
             f1 += our_average_winnings

@@ -145,7 +145,10 @@ def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
         stats_merged: PlayerStats
             The merged stats.
     """
-    assert stats1["uuid"] == stats2["uuid"]
+    if stats1["uuid"] != stats2["uuid"]:
+        raise ValueError(
+            f"UUIDs do not match, found {stats1['uuid']} and {stats2['uuid']}"
+        )
     return {
         "uuid": stats1["uuid"],
         "winnings": stats1["winnings"] + stats2["winnings"],
@@ -210,17 +213,15 @@ class Game:
         if len(cards) <= 0:
             raise ValueError("No cards provided")
 
-        self.players: Final[Dict[str, BasePlayer]] = {
-            player.uuid: player for player in players
-        }
+        self.players: Final[List[BasePlayer]] = players
         self.players_info: Final[Dict[str, Dict[str, Any]]] = {
-            name: {"name": name, "stack": stack, "uuid": name} for name in self.players
+            model.uuid: {"name": model.uuid, "stack": stack, "uuid": model.uuid}
+            for model in self.players
         }
-        if len(self.players) != len(players):
-            raise ValueError(
-                "Some players have the same uuid. Please give each "
-                "player a unique uuid."
-            )
+
+        # Check that all players have unique UUIDs
+        if len(self.players_info) != len(self.players):
+            raise ValueError("Players must have unique UUIDs")
 
         self.cards: Final[List[str]] = cards
         self.max_rounds: Final[int] = max_rounds
@@ -235,8 +236,8 @@ class Game:
             self.small_blind_amount,
             0,  # NO ANTE
         )
-        for name, model in self.players.items():
-            self.emulator.register_player(name, model)
+        for model in self.players:
+            self.emulator.register_player(model.uuid, model)
 
     @staticmethod
     def from_config(
@@ -327,8 +328,8 @@ class Game:
 
         player_stats = {}
         for player in self.players:
-            player_stats[player] = default_player_stats()
-            player_stats[player]["uuid"] = player
+            player_stats[player.uuid] = default_player_stats()
+            player_stats[player.uuid]["uuid"] = player.uuid
 
         for i in range(num_games):
             # Play a game
@@ -336,8 +337,10 @@ class Game:
                 dealer_button=dealer_button, seed=seed, games_played=i
             )
 
-            for player, player_round_stats in round_stats.items():
-                player_stats[player] = merge(player_stats[player], player_round_stats)
+            for player_uuid, player_round_stats in round_stats.items():
+                player_stats[player_uuid] = merge(
+                    player_stats[player_uuid], player_round_stats
+                )
 
             # print("Game", i, "done", round_stats['model_1']['winnings'])
 
@@ -346,38 +349,3 @@ class Game:
             dealer_button = (dealer_button + 1) % len(self.players)
 
         return player_stats
-
-
-def evaluate_performance(
-    players: List[BasePlayer],
-    config: Config,
-    num_games: int = 100,
-    seed: Optional[int] = None,
-) -> Dict[str, PlayerStats]:
-    """Evaluate the fitness of a player against other opponents.
-
-    Parameters:
-        players List[BasePlayer]
-            The players to simulate.
-        config: Config
-            The game configuration.
-        num_games: int
-            The number of games to play.
-        seed: Optional[int]
-            The seed to use for the evaluation.
-
-    Returns:
-        fitnesses: List[float]
-            The fitness of the players
-
-    Fitness is defined by the average winnings per game, but can
-    be adjusted to something else (TODO).
-    """
-    assert len(players) == NUM_PLAYERS
-    assert num_games > 0
-
-    # Create game
-    game: Final[Game] = Game.from_config(players, config)
-
-    # Play multiple games
-    return game.play_multiple(num_games=num_games, seed=seed)

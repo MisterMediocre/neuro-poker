@@ -7,7 +7,7 @@ TODO: Fill out script, add more options, etc.
 from typing import Final
 
 from neuropoker.config import Config
-from neuropoker.game import evaluate_performance
+from neuropoker.game import Game
 from neuropoker.players.naive_player import CallPlayer, RandomPlayer
 
 
@@ -15,17 +15,19 @@ def main() -> None:
     """Run the script."""
     config: Final[Config] = Config("configs/3p_4s_neat.toml")
 
-    f1 = evaluate_performance(
+    game_1 = Game.from_config(
         [RandomPlayer("random"), RandomPlayer("random2"), RandomPlayer("random3")],
         config,
     )
-    print(f1)
+    fitness_1 = game_1.play_multiple(num_games=100, seed=1337)
+    print(fitness_1)
 
-    f2 = evaluate_performance(
+    game_2 = Game.from_config(
         [CallPlayer("call"), RandomPlayer("random"), RandomPlayer("random2")],
         config,
     )
-    print(f2)
+    fitness_2 = game_2.play_multiple(num_games=100, seed=1337)
+    print(fitness_2)
 
 
 if __name__ == "__main__":
