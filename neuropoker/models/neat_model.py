@@ -3,13 +3,12 @@
 
 import random
 import time
-from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Final, List, Optional, Union
+from typing import Dict, Final, List, Optional
 
+from neat import Config as NEATConfig
 from neat import (
-    Config,
     DefaultGenome,
     DefaultReproduction,
     DefaultSpeciesSet,
@@ -18,43 +17,14 @@ from neat import (
     StatisticsReporter,
     StdOutReporter,
 )
-from neat.nn import FeedForwardNetwork, RecurrentNetwork
+from neat.nn import FeedForwardNetwork
 from neat.parallel import ParallelEvaluator
 
-from neuropoker.game import evaluate_performance
+from neuropoker.config import Config as NeuropokerConfig
+from neuropoker.game import PlayerStats, evaluate_performance
 from neuropoker.models.base_model import BaseModel
-from neuropoker.player_utils import load_player
 from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.neat_player import NEATPlayer
-
-NEATNetwork = Union[FeedForwardNetwork, RecurrentNetwork]
-
-
-@dataclass
-class NEATEvolution:
-    """The result of a NEAT neuroevolution training run."""
-
-    population: Population
-    stats: StatisticsReporter
-    best_genome: DefaultGenome
-
-
-def get_network(evolution: NEATEvolution) -> NEATNetwork:
-    """Get the network from the best genome.
-
-    Parameters:
-        evolution: NEATEvolution
-            The evolution to get the network from.
-
-    Returns:
-        net: NEATNetwork
-            The network.
-
-    NOTE: Assumes this is a NEAT model, not a HyperNEAT / ES-HyperNEAT model.
-
-    TODO: Write this in a more extensible way.
-    """
-    return FeedForwardNetwork.create(evolution.best_genome, evolution.population.config)
+from neuropoker.players.neat_player import NEATNetwork, NEATPlayer
 
 
 class NEATModel(BaseModel):
@@ -62,34 +32,26 @@ class NEATModel(BaseModel):
 
     def __init__(
         self,
-        evolution: Optional[NEATEvolution] = None,
-        config_file: Path = Path("config-feedforward.txt"),
+        neat_config_file: Path = Path("configs/3p_4s_neat.txt"),
     ) -> None:
         """Create a NEAT neuroevolution model.
 
         Parameters:
-            evolution: NEATEvolution | None
-                The initial evolution to evolve from, if any.
-            config_file: Path
+            neat_config_file: Path
                 The path to the NEAT configuration file.
-            num_generations: int
-                The number of generations to run.
-            num_cores: int
-                The number of cores to use in parallel.
         """
         # Load NEAT config
-        self.config: Final[Config] = Config(
+        self.config: Final[NEATConfig] = NEATConfig(
             DefaultGenome,
             DefaultReproduction,
             DefaultSpeciesSet,
             DefaultStagnation,
-            config_file,
+            neat_config_file,
         )
 
-        # Get or create population
-        self.population: Final[Population] = (
-            evolution.population if evolution is not None else Population(self.config)
-        )
+        # Create population
+        self.population: Final[Population] = Population(self.config)
+        self.best_genome: Optional[DefaultGenome] = None
 
         # Reset fitness values and recompute them.
         #
@@ -117,11 +79,24 @@ class NEATModel(BaseModel):
         """
         return FeedForwardNetwork.create(genome, self.config)
 
+    def get_best_genome_network(self) -> NEATNetwork:
+        """Get the network from the best genome.
+
+        Returns:
+            net: NEATNetwork
+                The network created from the best genome.
+        """
+        if self.best_genome is None:
+            raise ValueError("No best genome found")
+        return self.get_network(self.best_genome)
+
     def evaluate_genome(
         self,
         genome: DefaultGenome,
-        _config: Config,
-        opponents: List[str],
+        _neat_config: NEATConfig,
+        opponents: List[BasePlayer],
+        neuropoker_config: NeuropokerConfig,
+        num_games: int = 500,
         seed: Optional[int] = None,
     ) -> float:
         """Evaluate a single genome.
@@ -129,80 +104,107 @@ class NEATModel(BaseModel):
         Parameters:
             genome: DefaultGenome
                 The genome to evaluate.
-            config: Config
+            _neat_config: NEATConfig
                 The NEAT configuration.
-            opponents: List[str] | None
+            opponents: List[BasePlayer]
                 The list of opponents to play against.
+            cards: List[str]
+                The set of cards to use in each game.
+            num_games: int
+                The number of games to play in each position.
             seed: int | None
                 The seed to use for the evaluation.
+
+        Returns:
+            fitness: float
+                The fitness of this genome.
         """
+        if len(opponents) == 0:
+            raise ValueError("At least one opponent must be provided")
 
-        assert len(opponents) > 0, "At least one opponent must be provided"
+        # Randomize seed if not provided
+        random.seed(seed if seed is not None else time.time())
 
-        net = self.get_network(genome)
-
-        random.seed(time.time())
-        seed = random.randint(0, 1000)
-
-        f1 = 0
+        f1: float = 0
         for i in range(3):
-            player_pos = i
-            opponent_1_pos = (player_pos + 1) % 3
-            opponent_2_pos = (player_pos + 2) % 3
+            player_pos: int = i
+            opponent_1_pos: int = (player_pos + 1) % 3
+            opponent_2_pos: int = (player_pos + 2) % 3
 
-            player_names = [
+            player_uuids: List[str] = [
                 f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)
             ]
-            player_name = player_names[player_pos]
+            player_uuid: str = player_uuids[player_pos]
 
-            players = [BasePlayer()] * 3  # Initialize a list of size 3 with None
-            players[player_pos] = NEATPlayer(net, player_names[player_pos])
-            players[opponent_1_pos] = load_player(
-                random.choice(opponents), player_names[opponent_1_pos]
+            # Initialize players
+            players_dict: Dict[int, BasePlayer] = (
+                {}
+            )  # Initialize a list of size 3 with None
+            players_dict[player_pos] = NEATPlayer(
+                player_uuids[player_pos], self.get_network(genome), training=False
             )
-            players[opponent_2_pos] = load_player(
-                random.choice(opponents), player_names[opponent_2_pos]
-            )
+            players_dict[opponent_1_pos] = random.choice(opponents)
+            players_dict[opponent_2_pos] = random.choice(opponents)
+
+            # Convert to sorted list
+            players: List[BasePlayer] = [players_dict[i] for i in range(3)]
 
             # Play each position 100 times, but with same seeds and hence same cards drawn
-            player_performance = evaluate_performance(
-                player_names, players, seed=seed, num_games=500
-            )[player_name]
-            average_winnings = (
-                player_performance["winnings"] / player_performance["num_games"]
+            player_performances: Dict[str, PlayerStats] = evaluate_performance(
+                players, neuropoker_config, num_games=num_games, seed=seed
             )
-            f1 += average_winnings
+
+            our_average_winnings: float = (
+                player_performances[player_uuid]["winnings"]
+                / player_performances[player_uuid]["num_games"]
+            )
+
+            f1 += our_average_winnings
 
         return f1 / 3
 
     def run(
         self,
-        opponents: List[str],
+        opponents: List[BasePlayer],
+        neuropoker_config: NeuropokerConfig,
         num_generations: int = 50,
+        num_games: int = 500,
         num_cores: int = 1,
     ) -> DefaultGenome:
         """Run evolutionary training to evolve poker players.
 
         Parameters:
-            opponents: List[str]
+            opponents: List[BasePlayer]
                 The list of opponents to play against.
+            neuropoker_config: NeuropokerConfig
+                The game configuration.
             num_generations: int
                 The number of generations to run.
+            num_games: int
+                The number of games to run to evaluate each genome,
+                in each position, in each generation.
             num_cores: int
                 The number of cores to use in parallel.
 
         Returns:
-            winner: DefaultGenome
+            best_genome: DefaultGenome
                 The winning genome.
         """
-        curried_evaluate_genome = partial(self.evaluate_genome, opponents=opponents)
+        curried_evaluate_genome = partial(
+            self.evaluate_genome,
+            opponents=opponents,
+            neuropoker_config=neuropoker_config,
+            num_games=num_games,
+        )
 
         evaluator: Final[ParallelEvaluator] = ParallelEvaluator(
             num_cores, curried_evaluate_genome
         )
 
-        winner: Final[DefaultGenome] = self.population.run(  # type: ignore
+        best_genome: Final[DefaultGenome] = self.population.run(  # type: ignore
             evaluator.evaluate, n=num_generations
         )
 
-        return winner
+        self.best_genome = best_genome
+
+        return best_genome

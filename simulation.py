@@ -4,21 +4,26 @@
 
 TODO: Fill out script, add more options, etc.
 """
+from typing import Final
 
+from neuropoker.config import Config
 from neuropoker.game import evaluate_performance
 from neuropoker.players.naive_player import CallPlayer, RandomPlayer
 
 
 def main() -> None:
     """Run the script."""
+    config: Final[Config] = Config("configs/3p_4s_neat.toml")
+
     f1 = evaluate_performance(
-        ["random", "random2", "random3"],
-        [RandomPlayer(), RandomPlayer(), RandomPlayer()],
+        [RandomPlayer("random"), RandomPlayer("random2"), RandomPlayer("random3")],
+        config,
     )
     print(f1)
 
     f2 = evaluate_performance(
-        ["call", "random", "random2"], [CallPlayer(), RandomPlayer(), RandomPlayer()]
+        [CallPlayer("call"), RandomPlayer("random"), RandomPlayer("random2")],
+        config,
     )
     print(f2)
 

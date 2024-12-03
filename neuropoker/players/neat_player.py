@@ -1,39 +1,81 @@
 """Poker player which is learned through NEAT neuroevolution.
 """
 
-from typing import Tuple
+from typing import Final, Optional, Tuple, Union
 
 import numpy as np
+from neat.nn import FeedForwardNetwork, RecurrentNetwork
 
 from neuropoker.game_utils import extract_features
 from neuropoker.players.base_player import BasePlayer
 from neuropoker.players.naive_player import RandomPlayer
 
+NEATNetwork = Union[FeedForwardNetwork, RecurrentNetwork]
+
 
 class NEATPlayer(BasePlayer):
     """A player which uses a NEAT neuro-evolved network to take actions."""
 
-    def __init__(self, net, uuid, training=False) -> None:
-        self.training = training
-        self.net = net
-        self.uuid = uuid
+    def __init__(
+        self,
+        uuid: str,
+        net: NEATNetwork,
+        training: bool = False,
+    ) -> None:
+        """Initialize the model.
+
+        Parameters:
+            uuid: str
+                A unique name for the player.
+            net: NEATNetwork
+                The NEAT network to use for decision making.
+            training: bool
+                Whether the player is training or not.
+        """
+        super().__init__(uuid)
+
+        self.net: Final[NEATNetwork] = net
+        self.training: Final[bool] = training
+
+        # Helps bootstrap the model by ensuring it sees a variety of
+        # situations.
+        self.random_surrogate_player: Final[Optional[RandomPlayer]] = (
+            RandomPlayer("surrogate") if self.training else None
+        )
 
     def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
+        """Select an action, using the model.
 
-        random_player = RandomPlayer()
+        Parameters:
+            valid_actions: List[Dict[str, Union[str, int]]]
+                The valid actions the player can take.
+            hole_card: List[str]
+                The player's hole cards.
+            round_state: Dict[str, Any]
+                The state of the round.
 
-        ## Bootstrap the model by ensuring it sees a variety of situations
+        Returns:
+            action: str
+                The action to take.
+            amount: int
+                The amount to bet or raise.
+        """
+
+        # Bootstrap the model by ensuring it sees a variety of situations
         if self.training:
-            if len(round_state["community_card"]) == 0 and np.random.rand() < 0.30:
-                return random_player.declare_action(
-                    valid_actions, hole_card, round_state
-                )
-            if len(round_state["community_card"]) == 3 and np.random.rand() < 0.2:
-                return random_player.declare_action(
-                    valid_actions, hole_card, round_state
-                )
-            if len(round_state["community_card"]) == 4 and np.random.rand() < 0.15:
-                return random_player.declare_action(
+            # Validate that the surrogate player exists
+            if self.random_surrogate_player is None:
+                raise ValueError("Random surrogate player not initialized.")
+
+            # With some random probability, select a random action
+            #
+            # (Similar to e-greedy exploration in RL)
+            if (
+                (len(round_state["community_card"]) == 0 and np.random.rand() < 0.30)
+                or (len(round_state["community_card"]) == 3 and np.random.rand() < 0.2)
+                or (len(round_state["community_card"]) == 4 and np.random.rand() < 0.15)
+            ):
+                return self.random_surrogate_player.declare_action(
                     valid_actions, hole_card, round_state
                 )
 

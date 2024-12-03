@@ -5,14 +5,17 @@
 
 import argparse
 import os
-import pickle
 from pathlib import Path
 from typing import Final, List
 
-from neuropoker.models.neat_model import NEATEvolution, NEATModel
+from neuropoker.cards import get_card_list
+from neuropoker.config import Config
+from neuropoker.models.neat_model import NEATModel
+from neuropoker.player_utils import load_player, player_type_from_string
+from neuropoker.players.base_player import BasePlayer
 
-DEFAULT_EVOLUTION_FILE: Final[Path] = Path("models/neat_poker.pkl")
-DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat")
+DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
+DEFAULT_MODEL_FILE: Final[Path] = Path("models/neat_poker.pkl")
 DEFAULT_NUM_GENERATIONS: Final[int] = 50
 DEFAULT_NUM_CORES: Final[int] = os.cpu_count() or 1
 DEFAULT_BATCH_SIZE: Final[int] = 5
@@ -28,23 +31,22 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a poker player using NEAT.")
 
     parser.add_argument(
-        "-f",
-        "--evolution-file",
-        type=Path,
-        default=DEFAULT_EVOLUTION_FILE,
-        help=(
-            "File to read/save the evolution to/from. "
-            f"(default: {DEFAULT_EVOLUTION_FILE})"
-        ),
-    )
-    parser.add_argument(
-        "-m",
+        "-t",
         "--config-file",
         type=Path,
         default=DEFAULT_CONFIG_FILE,
         help=(
-            "File to read the NEAT model configuration from. "
+            "The configuration file that defines the model and game."
             f"(default: {DEFAULT_CONFIG_FILE})"
+        ),
+    )
+    parser.add_argument(
+        "-f",
+        "--model-file",
+        type=Path,
+        default=DEFAULT_MODEL_FILE,
+        help=(
+            f"The file to read and/or save the model to. (default: {DEFAULT_MODEL_FILE})"
         ),
     )
     parser.add_argument(
@@ -76,7 +78,7 @@ def get_args() -> argparse.Namespace:
         type=str,
         nargs="+",
         default=["CallPlayer"],
-        help=("Name of the opponents from which to sample from"),
+        help=("Names of the opponents from which to sample from"),
     )
 
     return parser.parse_args()
@@ -87,68 +89,92 @@ def main() -> None:
 
     # Read args
     args: Final[argparse.Namespace] = get_args()
-    evolution_file: Final[Path] = args.evolution_file
+
     config_file: Final[Path] = args.config_file
+    model_file: Final[Path] = args.model_file
+
     num_cores: Final[int] = args.num_cores
     num_generations: Final[int] = args.num_generations
     batch_size: Final[int] = args.batch_size
     opponents: Final[List[str]] = args.opponents
 
     print("Running with:")
-    print(f"    Evolution file : {evolution_file}")
     print(f"    Config file    : {config_file}")
+    print(f"    Model file     : {model_file}")
+    print()
     print(f"    Generations    : {num_generations}")
     print(f"    Cores          : {num_cores}")
     print(f"    Batch size     : {batch_size}")
     print(f"    Opponents      : {opponents}")
     print()
 
-    # Initialize variables
-    evolution = None  # Evolved population
+    # Read config file
+    print(f"Reading config file {config_file}...")
+    config: Final[Config] = Config(config_file)
 
-    # Load previous evolution, if it exists
-    if evolution_file.exists():
-        # Load evolution
-        print(f"Loading evolution file from {evolution_file}...")
-        with evolution_file.open("rb") as ef:
-            evolution = pickle.load(ef)
+    model_type: Final[str] = config["model"]["type"]
+    game_suits: Final[List[str]] = config["game"]["suits"]
+    game_ranks: Final[List[str]] = config["game"]["ranks"]
+    game_cards: Final[List[str]] = get_card_list(game_suits, game_ranks)
+    game_players: Final[int] = config["game"]["players"]
 
-            if not isinstance(evolution, NEATEvolution):
-                raise ValueError("Evolution file is invalid")
+    print("    Model:")
+    print(f"        Model type   : {model_type}")
+    print("    Game:")
+    print(f"        Suits        : {len(game_suits)} {game_suits}")
+    print(f"        Ranks        : {len(game_ranks)} {game_ranks}")
+    print(f"        Deck size    : {len(game_cards)}")
+    print(f"        Players      : {game_players}")
+    print(f"    Model type       : {model_type}")
+    print()
 
-            print(
-                f"Running until generation {num_generations + evolution.population.generation}..."
-            )
+    # Set up the model
+    #
+    # Load previous model, if it exists
+    # Otherwise, start from scratch
+    if model_file.exists():
+        print(f"Loading model file from {model_file}...")
+        model: NEATModel = NEATModel.from_pickle(model_file)
+        print(
+            f"Running until generation {num_generations + model.population.generation}..."
+        )
     else:
-        # Start from scratch
-        print("Starting new evolution")
+        neat_config_file: Final[Path] = config["model"]["neat_config_file"]
+
+        print("Starting new model")
+        print(f"Using NEAT config file {neat_config_file}")
         print(f"Running until generation {num_generations}...")
+        model = NEATModel(neat_config_file=neat_config_file)
 
-    # Run NEAT
+    # Set up the opponents
+    opponent_players: List[BasePlayer] = [
+        load_player(
+            player_type_from_string(opponent),
+            f"opponent-{i}",
+            model_type=None,
+            model_file=None,
+        )
+        for i, opponent in enumerate(opponents)
+    ]
 
-    # Save model after every <batch_size> generations
+    # Train the model
+    #
+    # Checkpoint the model after every <batch_size> generations
     # Reset fitness values as well, so that bad history is not carried over
     num_batches = num_generations // batch_size
 
     for i in range(num_batches):
         print(f"Running batch {i+1}/{num_batches}")
-        model = NEATModel(
-            evolution=evolution,
-            config_file=config_file,
-        )
-        winner = model.run(
-            opponents=opponents,
+
+        model.run(
+            opponent_players,
+            config,
             num_generations=batch_size,
             num_cores=num_cores,
         )
-        evolution = NEATEvolution(
-            population=model.population, stats=model.stats, best_genome=winner
-        )
 
         # Save model
-        with evolution_file.open("wb") as ef:
-            pickle.dump(evolution, ef)
-            print(f"Saved evolution at {evolution_file}")
+        model.to_pickle(model_file)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,13 @@
 """Classes and functions for poker games.
 """
 
-from typing import Any, Dict, Final, List, TypedDict
+from typing import Any, Dict, Final, List, Optional, TypedDict
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
 
-from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list, get_deck
+from neuropoker.cards import get_card_list, get_deck
+from neuropoker.config import Config
 from neuropoker.game_utils import NUM_PLAYERS
 from neuropoker.players.base_player import BasePlayer
 
@@ -180,9 +181,8 @@ class Game:
 
     def __init__(
         self,
-        player_names: List[str],
-        player_models: List[BasePlayer],
-        cards: List[str] = [],
+        players: List[BasePlayer],
+        cards: List[str],
         max_rounds: int = 1,
         small_blind_amount: int = SMALL_BLIND_AMOUNT,
         stack: int = STACK,
@@ -190,10 +190,8 @@ class Game:
         """Initialize the game.
 
         Parameters:
-            player_names: List[str]
-                The names of the players.
-            player_models: List[BasePlayer]
-                The models of the players.
+            players: List[str]
+                The list of players.
             cards: List[str]
                 The list of cards available to use in the deck.
             max_rounds: int
@@ -205,12 +203,15 @@ class Game:
             stack: int
                 The stack size for each player.
         """
-        assert len(player_names) == len(player_models)
-        assert len(player_names) == NUM_PLAYERS
-        assert len(cards) > 0
+        if len(players) != NUM_PLAYERS:
+            raise ValueError(
+                f"There must be 3 players, instead received {len(players)} players"
+            )
+        if len(cards) <= 0:
+            raise ValueError("No cards provided")
 
         self.players: Final[Dict[str, BasePlayer]] = {
-            name: model for name, model in zip(player_names, player_models)
+            player.uuid: player for player in players
         }
         self.players_info: Final[Dict[str, Dict[str, Any]]] = {
             name: {"name": name, "stack": stack, "uuid": name} for name in self.players
@@ -232,22 +233,54 @@ class Game:
         for name, model in self.players.items():
             self.emulator.register_player(name, model)
 
+    @staticmethod
+    def from_config(
+        players: List[BasePlayer],
+        config: Config,
+    ) -> "Game":
+        """Initialize the game from a configuration file.
+
+        Parameters:
+            players: List[BasePlayer]
+                The list of players.
+            config: Config
+                The configuration file.
+        """
+        config = config["game"]
+        if len(players) != config["players"]:
+            raise ValueError(
+                f"Number of players in config ({config['players']}) "
+                f"does not match length of provided players "
+                f"({len(players)})."
+            )
+
+        cards: Final[List[str]] = get_card_list(config["suits"], config["ranks"])
+
+        return Game(
+            players,
+            cards,
+            max_rounds=config["rounds"],
+            small_blind_amount=config["small_blind"],
+            # big_blind_amount=config["big_blind"],
+            stack=config["stack"],
+        )
+
     def play(
         self,
         dealer_button: int = 0,
-        seed: int = 1,
         games_played: int = 0,
+        seed: Optional[int] = None,
     ) -> Dict[str, PlayerStats]:
         """Play a single round/game of Poker.
 
         Parameters:
             dealer_button: int
                 The position of the dealer button.
-            seed: int
-                The seed to use for the game.
             games_played: int
                 The number of games previously played.
                 (Used to keep decks unique in each game)
+            seed: Optional[int]
+                The seed to use for the game.
 
         Returns:
             winnings: List[float]
@@ -260,7 +293,8 @@ class Game:
 
         # Same seed means same cards dealt
         initial_state["table"].deck = get_deck(
-            cards=self.cards, seed=seed * 100 + games_played
+            cards=self.cards,
+            seed=(seed * 100 + games_played if seed is not None else None),
         )
         initial_state["table"].dealer_btn = dealer_button
 
@@ -270,14 +304,14 @@ class Game:
         return read_game(game_state, events)
 
     def play_multiple(
-        self, num_games: int = 100, seed: int = 1
+        self, num_games: int = 100, seed: Optional[int] = None
     ) -> Dict[str, PlayerStats]:
         """Play multiple games of Poker.
 
         Parameters:
             num_games: int
                 The number of games to play.
-            seed: int
+            seed: Optional[int]
                 The seed to use for the games.
 
         Returns:
@@ -310,21 +344,21 @@ class Game:
 
 
 def evaluate_performance(
-    player_names: List[str],
-    player_models: List[BasePlayer],
+    players: List[BasePlayer],
+    config: Config,
     num_games: int = 100,
-    seed: int = 1,
+    seed: Optional[int] = None,
 ) -> Dict[str, PlayerStats]:
     """Evaluate the fitness of a player against other opponents.
 
     Parameters:
-        player_names: List[str]
-            The names of the players to simulate.
-        player_models: List[BasePlayer]
-            The models of the players to simulate.
+        players List[BasePlayer]
+            The players to simulate.
+        config: Config
+            The game configuration.
         num_games: int
             The number of games to play.
-        seed: int
+        seed: Optional[int]
             The seed to use for the evaluation.
 
     Returns:
@@ -334,16 +368,11 @@ def evaluate_performance(
     Fitness is defined by the average winnings per game, but can
     be adjusted to something else (TODO).
     """
-    assert len(player_names) == len(player_models)
-    assert len(player_names) == NUM_PLAYERS
+    assert len(players) == NUM_PLAYERS
     assert num_games > 0
 
-    # Create card list
-    # Use a short deck
-    cards: Final[List[str]] = get_card_list(ranks=SHORT_RANKS, suits=SHORTER_SUITS)
-
     # Create game
-    game: Final[Game] = Game(player_names, player_models, cards=cards)
+    game: Final[Game] = Game.from_config(players, config)
 
     # Play multiple games
     return game.play_multiple(num_games=num_games, seed=seed)

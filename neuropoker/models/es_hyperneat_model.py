@@ -3,7 +3,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Final, Optional
+from typing import Any, Dict, Final, override
 
 from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
@@ -11,7 +11,8 @@ from pureples.es_hyperneat.es_hyperneat import ESNetwork
 from pureples.shared.substrate import Substrate
 
 from neuropoker.models.hyperneat_model import CoordinateList
-from neuropoker.models.neat_model import NEATEvolution, NEATModel, NEATNetwork
+from neuropoker.models.neat_model import NEATModel
+from neuropoker.players.neat_player import NEATNetwork
 
 
 def get_es_config(es_config_file: Path) -> Dict[str, Any]:
@@ -34,21 +35,18 @@ class ESHyperNEATModel(NEATModel):
 
     def __init__(
         self,
-        evolution: Optional[NEATEvolution] = None,
-        config_file: Path = Path("config-feedforward.txt"),
-        es_config_file: Path = Path("config-es-feedforward.json"),
+        neat_config_file: Path = Path("config/3p_4s_neat.txt"),
+        es_config_file: Path = Path("config/3p_4s_es.json"),
     ) -> None:
         """Create a HyperNEAT neuroevolution model.
 
         Parameters:
-            evolution: NEATEvolution | None
-                The initial evolution to evolve from, if any.
-            config_file: Path
+            neat_config_file: Path
                 The path to the NEAT configuration file.
             es_config_file: Path
                 The path to the ES-HyperNEAT configuration file.
         """
-        super().__init__(evolution=evolution, config_file=config_file)
+        super().__init__(neat_config_file=neat_config_file)
 
         # TODO: Don't hardcode input and output dimensionality
         self.input_dims: Final[int] = 80  # Number of features
@@ -79,6 +77,7 @@ class ESHyperNEATModel(NEATModel):
         # Load ES-HyperNEAT config
         self.es_config: Final[Dict[str, Any]] = get_es_config(es_config_file)
 
+    @override
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:
         """Get the network from a genome.
 

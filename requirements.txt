@@ -2,4 +2,5 @@ pypokerengine
 matplotlib
 neat-python
 numpy
+toml
 git+https://github.com/ukuleleplayer/pureples.git

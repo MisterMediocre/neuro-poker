@@ -2,14 +2,15 @@
 """
 
 from pathlib import Path
-from typing import Final, List, Optional, Tuple, Union
+from typing import Final, List, Optional, Tuple, Union, override
 
 from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from pureples.hyperneat.hyperneat import create_phenotype_network
 from pureples.shared.substrate import Substrate
 
-from neuropoker.models.neat_model import NEATEvolution, NEATModel, NEATNetwork
+from neuropoker.models.neat_model import NEATModel
+from neuropoker.players.neat_player import NEATNetwork
 
 DEFAULT_HIDDEN_SIZES: List[int] = [64, 64]
 CoordinateList = List[Tuple[float, float]]
@@ -20,21 +21,18 @@ class HyperNEATModel(NEATModel):
 
     def __init__(
         self,
-        evolution: Optional[NEATEvolution] = None,
-        config_file: Path = Path("config-feedforward.txt"),
-        hidden_sizes: Union[int, List[int]] = DEFAULT_HIDDEN_SIZES,
+        neat_config_file: Path = Path("configs/3p_4s_neat.txt"),
+        hidden_sizes: Optional[Union[int, List[int]]] = None,
     ) -> None:
         """Create a HyperNEAT neuroevolution model.
 
         Parameters:
-            evolution: NEATEvolution | None
-                The initial evolution to evolve from, if any.
             config_file: Path
                 The path to the NEAT configuration file.
             hidden_sizes: int | List[int]
                 The number of hidden nodes in each layer.
         """
-        super().__init__(evolution=evolution, config_file=config_file)
+        super().__init__(neat_config_file=neat_config_file)
 
         self.hidden_sizes: List[int]
         match hidden_sizes:
@@ -42,8 +40,10 @@ class HyperNEATModel(NEATModel):
                 self.hidden_sizes = [hidden_sizes]
             case list():
                 self.hidden_sizes = hidden_sizes
-            case _:
+            case None:
                 self.hidden_sizes = DEFAULT_HIDDEN_SIZES
+            case _:
+                raise ValueError(f"Ill-defined hidden_sizes: {hidden_sizes}")
 
         # TODO: Don't hardcode input and output dimensionality
         self.input_dims: Final[int] = 80  # Number of features
@@ -79,6 +79,7 @@ class HyperNEATModel(NEATModel):
             self.hidden_coordinates,
         )
 
+    @override
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:
         """Get the network from a genome.
 

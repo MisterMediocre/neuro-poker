@@ -1,0 +1,14 @@
+# 3-player, 4-suit model trained using NEAT.
+
+[game]
+suits = ['C', 'D', 'H', 'S']
+ranks = ['6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+players = 3
+rounds = 1
+small_blind = 25
+big_blind = 50
+stack = 1000
+
+[model]
+type = "neat"
+neat_config_file = "configs/3p_4s_neat.txt"
