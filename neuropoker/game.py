@@ -216,6 +216,11 @@ class Game:
         self.players_info: Final[Dict[str, Dict[str, Any]]] = {
             name: {"name": name, "stack": stack, "uuid": name} for name in self.players
         }
+        if len(self.players) != len(players):
+            raise ValueError(
+                "Some players have the same uuid. Please give each "
+                "player a unique uuid."
+            )
 
         self.cards: Final[List[str]] = cards
         self.max_rounds: Final[int] = max_rounds

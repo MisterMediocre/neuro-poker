@@ -9,7 +9,9 @@ from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from pureples.es_hyperneat.es_hyperneat import ESNetwork
 from pureples.shared.substrate import Substrate
+from termcolor import colored
 
+from neuropoker.config import Config as NeuropokerConfig
 from neuropoker.models.hyperneat_model import CoordinateList
 from neuropoker.models.neat_model import NEATModel
 from neuropoker.players.neat_player import NEATNetwork
@@ -75,7 +77,49 @@ class ESHyperNEATModel(NEATModel):
         )
 
         # Load ES-HyperNEAT config
+        self.es_config_file: Final[Path] = es_config_file
         self.es_config: Final[Dict[str, Any]] = get_es_config(es_config_file)
+
+    @classmethod
+    @override
+    def from_config(cls, config: NeuropokerConfig) -> "ESHyperNEATModel":
+        """Create a ES-HyperNEAT model from a neuropoker configuration.
+
+        Parameters:
+            config: NeuropokerConfig
+                The neuropoker configuration.
+
+        Returns:
+            model: ESHyperNEATModel
+                The ES-HyperNEAT model.
+        """
+        config = config["model"]
+
+        if config["type"] != "es-hyperneat":
+            raise ValueError(f"Config has wrong model type: {config['type']}")
+
+        return ESHyperNEATModel(
+            neat_config_file=config["neat_config_file"],
+            es_config_file=config["es_config_file"],
+        )
+
+    @override
+    def print_config(self) -> None:
+        """Print the configuration of this model."""
+        print(colored("Model:", color="blue", attrs=["bold"]))
+        print(
+            colored(f"{'    Type':<20q}", color="blue", attrs=["bold"])
+            + colored(": HyperNEAT", color="blue")
+        )
+        print(
+            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
+            + colored(f": {self.config_file}", color="blue")
+        )
+        print(
+            colored(f"{'    ES config':<20}", color="blue", attrs=["bold"])
+            + colored(f": {self.es_config_file}", color="blue")
+        )
+        print()
 
     @override
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:

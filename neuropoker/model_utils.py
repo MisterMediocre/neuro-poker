@@ -1,8 +1,12 @@
 """Utility functions for models."""
 
+import pickle
 from pathlib import Path
 from typing import Dict, Final, Optional, Type
 
+from termcolor import colored
+
+from neuropoker.config import Config as NeuropokerConfig
 from neuropoker.models.base_model import BaseModel, ModelT
 from neuropoker.models.es_hyperneat_model import ESHyperNEATModel
 from neuropoker.models.hyperneat_model import HyperNEATModel
@@ -34,6 +38,89 @@ def model_type_from_string(model_type_str: str) -> Type[BaseModel]:
     raise ValueError(f"Model type {model_type_str} not recognized")
 
 
+def get_model_from_config(config: NeuropokerConfig) -> BaseModel:
+    """Load a model from a configuration dictionary.
+
+    Parameters:
+        config: NeuropokerConfig
+            The configuration dictionary.
+
+    Returns:
+        model: BaseModel
+            The loaded model.
+    """
+    print(colored(f"Creating model from {config.config_file}...", color="blue"))
+    print()
+
+    match config["model"]["type"]:
+        case "neat":
+            return NEATModel.from_config(config)
+        case "hyperneat":
+            return HyperNEATModel.from_config(config)
+        case "es-hyperneat":
+            return ESHyperNEATModel.from_config(config)
+        case _:
+            raise ValueError(f"Model type {config['type']} not recognized")
+
+
+def get_model_from_pickle(model_file: Path) -> BaseModel:
+    """Load a model from a model file.
+
+    Parameters:
+        model_file: Path
+            The path to the model file.
+
+    Returns:
+        model: BaseModel
+            The loaded model.
+    """
+    print(colored(f"Loading model from {model_file}...", color="blue"))
+    print()
+
+    # Check if model file exists
+    if not model_file.exists():
+        raise FileNotFoundError(f"Model file {model_file} does not exist")
+
+    # Load model file
+    with model_file.open("rb") as f:
+        model = pickle.load(f)
+
+    if not issubclass(type(model), BaseModel):
+        raise ValueError(
+            f"Invalid model file {model_file}: Expected an object of "
+            f"type BaseModel (or subclass), found {type(model)}"
+        )
+
+    return model
+
+
+def save_model_to_pickle(model: BaseModel, model_file: Path) -> None:
+    """Save a model to a file.
+
+    Parameters:
+        model: BaseModel
+            The model to save.
+        model_file: Path
+            The path to the model file.
+    """
+    print(colored(f"Saving model to {model_file}...", color="blue"))
+
+    # Check if the model file's parent directory exists
+    if not model_file.parent.exists():
+        print(colored(f"Creating directory {model_file.parent}", color="yellow"))
+        model_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check if the model file exists
+    if model_file.exists():
+        print(colored(f"Overwriting {model_file}", color="yellow"))
+
+    # Save the model
+    with model_file.open("wb") as f:
+        pickle.dump(model, f)
+
+    print()
+
+
 def load_model(
     model_type: Type[ModelT],
     model_file: Optional[Path] = None,
@@ -60,6 +147,6 @@ def load_model(
         )
 
     if model_file is not None:
-        return model_type.from_pickle(model_file)
+        return get_model_from_pickle(model_file)  # type: ignore
 
     return model_type(**kwargs)

@@ -8,7 +8,9 @@ from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from pureples.hyperneat.hyperneat import create_phenotype_network
 from pureples.shared.substrate import Substrate
+from termcolor import colored
 
+from neuropoker.config import Config as NeuropokerConfig
 from neuropoker.models.neat_model import NEATModel
 from neuropoker.players.neat_player import NEATNetwork
 
@@ -78,6 +80,48 @@ class HyperNEATModel(NEATModel):
             self.output_coordinates,
             self.hidden_coordinates,
         )
+
+    @classmethod
+    @override
+    def from_config(cls, config: NeuropokerConfig) -> "HyperNEATModel":
+        """Create a HyperNEAT model from a configuration.
+
+        Parameters:
+            config: NeuropokerConfig
+                The configuration to use.
+
+        Returns:
+            model: HyperNEATModel
+                The HyperNEAT model.
+        """
+        config = config["model"]
+
+        if config["type"] != "hyperneat":
+            raise ValueError(f"Config has wrong model type: {config['type']}")
+
+        return HyperNEATModel(
+            neat_config_file=config["neat_config_file"],
+            hidden_sizes=config["hidden_sizes"],
+        )
+
+    @override
+    def print_config(self) -> None:
+        """Print the configuration of this model."""
+
+        print(colored("Model:", color="blue", attrs=["bold"]))
+        print(
+            colored(f"{'    Type':<20}", color="blue", attrs=["bold"])
+            + colored(": HyperNEAT", color="blue")
+        )
+        print(
+            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
+            + colored(f": {self.config_file}", color="blue")
+        )
+        print(
+            colored(f"{'    Hidden sizes':<20}", color="blue", attrs=["bold"])
+            + colored(f": {self.hidden_sizes}", color="blue")
+        )
+        print()
 
     @override
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:

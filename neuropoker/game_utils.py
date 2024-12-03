@@ -119,12 +119,19 @@ def extract_features(
             [normalized_position],
         ]
     )
-    print(f"Features shape : {features.shape}")
-    print(f"Features       : {features}")
-    print(f"Public cards   : {public_cards}")
-    print(f"Private cards  : {private_cards}")
-    print(f"Flattened bets : {flattened_bets}")
-    print(f"Stack sizes    : {stack_sizes}")
-    print(f"Player states  : {player_states}")
-    print(f"Position       : {normalized_position}")
+
+    # print("Game ranks           : ", game_ranks)
+    # print("Game suits           : ", game_suits)
+    # print(f"Num game cards      : {num_game_cards}")
+    # print(f"Public cards shape  : {public_cards.shape}")
+    # print(f"Private cards shape : {private_cards.shape}")
+    # print(f"Features shape : {features.shape}")
+    # print(f"Features       : {features}")
+    # print(f"Public cards   : {public_cards}")
+    # print(f"Private cards  : {private_cards}")
+    # print(f"Flattened bets : {flattened_bets}")
+    # print(f"Stack sizes    : {stack_sizes}")
+    # print(f"Player states  : {player_states}")
+    # print(f"Position       : {normalized_position}")
+
     return features

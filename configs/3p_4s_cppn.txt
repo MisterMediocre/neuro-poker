@@ -6,9 +6,9 @@ reset_on_extinction   = False
 
 [DefaultGenome]
 # node activation options
-activation_default     = sigmoid
-activation_mutate_rate = 0.0
-activation_options     = sigmoid relu tanh
+activation_default     = tanh
+activation_mutate_rate = 0.5
+activation_options     = gauss sin tanh
 
 # node aggregation options
 aggregation_default     = sum
@@ -44,8 +44,8 @@ node_add_prob         = 0.3
 node_delete_prob      = 0.15
 
 # network parameters
-num_hidden            = 5
-num_inputs            = 91
+num_hidden            = 0
+num_inputs            = 5
 num_outputs           = 6
 
 # node response options

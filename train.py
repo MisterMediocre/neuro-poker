@@ -8,8 +8,14 @@ import os
 from pathlib import Path
 from typing import Final, List
 
-from neuropoker.cards import get_card_list
+from termcolor import colored
+
 from neuropoker.config import Config
+from neuropoker.model_utils import (
+    get_model_from_config,
+    get_model_from_pickle,
+    save_model_to_pickle,
+)
 from neuropoker.models.neat_model import NEATModel
 from neuropoker.player_utils import load_player, player_type_from_string
 from neuropoker.players.base_player import BasePlayer
@@ -98,53 +104,78 @@ def main() -> None:
     batch_size: Final[int] = args.batch_size
     opponents: Final[List[str]] = args.opponents
 
-    print("Running with:")
-    print(f"    Config file    : {config_file}")
-    print(f"    Model file     : {model_file}")
-    print()
-    print(f"    Generations    : {num_generations}")
-    print(f"    Cores          : {num_cores}")
-    print(f"    Batch size     : {batch_size}")
-    print(f"    Opponents      : {opponents}")
+    print(colored("------------ train ------------", color="blue", attrs=["bold"]))
+    print(
+        colored(f'{"Config file":<12}', color="blue", attrs=["bold"])
+        + colored(f": {config_file}", color="blue")
+    )
+    print(
+        colored(f'{"Model file":<12}', color="blue", attrs=["bold"])
+        + colored(f": {model_file}", color="blue")
+    )
+    print(
+        colored(f'{"Generations":<12}', color="blue", attrs=["bold"])
+        + colored(f": {num_generations}", color="blue")
+    )
+    print(
+        colored(f'{"Cores":<12}', color="blue", attrs=["bold"])
+        + colored(f": {num_cores}", color="blue")
+    )
+    print(
+        colored(f'{"Batch size":<12}', color="blue", attrs=["bold"])
+        + colored(f": {batch_size}", color="blue")
+    )
+    print(
+        colored(f'{"Opponents":<12}', color="blue", attrs=["bold"])
+        + colored(f": {opponents}", color="blue")
+    )
     print()
 
     # Read config file
-    print(f"Reading config file {config_file}...")
+    print(colored(f"Reading config file {config_file}...", color="blue"))
+    print()
+
     config: Final[Config] = Config(config_file)
 
     model_type: Final[str] = config["model"]["type"]
     game_suits: Final[List[str]] = config["game"]["suits"]
     game_ranks: Final[List[str]] = config["game"]["ranks"]
-    game_cards: Final[List[str]] = get_card_list(game_suits, game_ranks)
     game_players: Final[int] = config["game"]["players"]
 
-    print("    Model:")
-    print(f"        Model type   : {model_type}")
-    print("    Game:")
-    print(f"        Suits        : {len(game_suits)} {game_suits}")
-    print(f"        Ranks        : {len(game_ranks)} {game_ranks}")
-    print(f"        Deck size    : {len(game_cards)}")
-    print(f"        Players      : {game_players}")
-    print(f"    Model type       : {model_type}")
+    print(colored("Model:", color="blue", attrs=["bold"]))
+    print(
+        colored(f"{'    Type':<12}", color="blue", attrs=["bold"])
+        + colored(f": {model_type}", color="blue")
+    )
+    print(colored("Game:", color="blue", attrs=["bold"]))
+    print(
+        colored(f"{'    Suits':<12}", color="blue", attrs=["bold"])
+        + colored(f": {len(game_suits)} {game_suits}", color="blue")
+    )
+    print(
+        colored(f"{'    Ranks':<12}", color="blue", attrs=["bold"])
+        + colored(f": {len(game_ranks)} {game_ranks}", color="blue")
+    )
+    print(
+        colored(f"{'    Players':<12}", color="blue", attrs=["bold"])
+        + colored(f": {game_players}", color="blue")
+    )
     print()
 
     # Set up the model
     #
     # Load previous model, if it exists
     # Otherwise, start from scratch
-    if model_file.exists():
-        print(f"Loading model file from {model_file}...")
-        model: NEATModel = NEATModel.from_pickle(model_file)
-        print(
-            f"Running until generation {num_generations + model.population.generation}..."
-        )
-    else:
-        neat_config_file: Final[Path] = config["model"]["neat_config_file"]
+    model: NEATModel
+    last_generation: int = num_generations
 
-        print("Starting new model")
-        print(f"Using NEAT config file {neat_config_file}")
-        print(f"Running until generation {num_generations}...")
-        model = NEATModel(neat_config_file=neat_config_file)
+    if model_file.exists():
+        model = get_model_from_pickle(model_file)  # type: ignore
+        last_generation += model.population.generation
+    else:
+        model = get_model_from_config(config)  # type: ignore
+
+    model.print_config()
 
     # Set up the opponents
     opponent_players: List[BasePlayer] = [
@@ -157,24 +188,44 @@ def main() -> None:
         for i, opponent in enumerate(opponents)
     ]
 
+    # print(opponent_players)
+
     # Train the model
     #
     # Checkpoint the model after every <batch_size> generations
     # Reset fitness values as well, so that bad history is not carried over
-    num_batches = num_generations // batch_size
+    initial_generation = last_generation - num_generations
 
-    for i in range(num_batches):
-        print(f"Running batch {i+1}/{num_batches}")
+    print(
+        colored(
+            f"Running for {num_generations} generations", color="blue", attrs=["bold"]
+        ),
+    )
 
+    print(
+        colored(f"{'First generation':<20}", color="blue", attrs=["bold"])
+        + colored(f": {initial_generation}", color="blue")
+    )
+    print(
+        colored(f"{'Last generation':<20}", color="blue", attrs=["bold"])
+        + colored(f": {last_generation}", color="blue")
+    )
+    print(
+        colored(f"{'Checkpoint interval':<20}", color="blue", attrs=["bold"])
+        + colored(f": Every {batch_size} generations", color="blue")
+    )
+
+    for gen_i in range(initial_generation, last_generation):
         model.run(
             opponent_players,
             config,
-            num_generations=batch_size,
+            num_generations=1,
             num_cores=num_cores,
         )
 
         # Save model
-        model.to_pickle(model_file)
+        if (gen_i + 1) % batch_size == 0 or (gen_i == last_generation - 1):
+            save_model_to_pickle(model, model_file)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import random
 import time
 from functools import partial
 from pathlib import Path
-from typing import Dict, Final, List, Optional
+from typing import Dict, Final, List, Optional, override
 
 from neat import Config as NEATConfig
 from neat import (
@@ -19,6 +19,7 @@ from neat import (
 )
 from neat.nn import FeedForwardNetwork
 from neat.parallel import ParallelEvaluator
+from termcolor import colored
 
 from neuropoker.config import Config as NeuropokerConfig
 from neuropoker.game import PlayerStats, evaluate_performance
@@ -41,6 +42,7 @@ class NEATModel(BaseModel):
                 The path to the NEAT configuration file.
         """
         # Load NEAT config
+        self.config_file: Final[Path] = neat_config_file
         self.config: Final[NEATConfig] = NEATConfig(
             DefaultGenome,
             DefaultReproduction,
@@ -65,6 +67,42 @@ class NEATModel(BaseModel):
 
         self.population.add_reporter(StdOutReporter(True))
         self.population.add_reporter(self.stats)
+
+    @classmethod
+    @override
+    def from_config(cls, config: NeuropokerConfig) -> "NEATModel":
+        """Create a NEAT model from a neuropoker configuration.
+
+        Parameters:
+            config: NeuropokerConfig
+                The neuropoker configuration.
+
+        Returns:
+            model: NEATModel
+                The NEAT model.
+        """
+        config = config["model"]
+
+        if config["type"] != "neat":
+            raise ValueError(f"Config has wrong model type: {config['type']}")
+
+        return NEATModel(
+            neat_config_file=config["neat_config_file"],
+        )
+
+    @override
+    def print_config(self) -> None:
+        """Print the configuration of this model."""
+        print(colored("Model:", color="blue", attrs=["bold"]))
+        print(
+            colored(f"{'    Type':<20}", color="blue", attrs=["bold"])
+            + colored(": HyperNEAT", color="blue")
+        )
+        print(
+            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
+            + colored(f": {self.config_file}", color="blue")
+        )
+        print()
 
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:
         """Get the network from a genome.
@@ -119,11 +157,12 @@ class NEATModel(BaseModel):
             fitness: float
                 The fitness of this genome.
         """
-        if len(opponents) == 0:
+        if len(opponents) < 1:
             raise ValueError("At least one opponent must be provided")
 
         # Randomize seed if not provided
         random.seed(seed if seed is not None else time.time())
+        net: Final[NEATNetwork] = self.get_network(genome)
 
         f1: float = 0
         for i in range(3):
@@ -131,23 +170,22 @@ class NEATModel(BaseModel):
             opponent_1_pos: int = (player_pos + 1) % 3
             opponent_2_pos: int = (player_pos + 2) % 3
 
-            player_uuids: List[str] = [
-                f"player-{i}" if i == player_pos else f"opponent-{i}" for i in range(3)
-            ]
-            player_uuid: str = player_uuids[player_pos]
-
             # Initialize players
-            players_dict: Dict[int, BasePlayer] = (
-                {}
-            )  # Initialize a list of size 3 with None
-            players_dict[player_pos] = NEATPlayer(
-                player_uuids[player_pos], self.get_network(genome), training=False
-            )
-            players_dict[opponent_1_pos] = random.choice(opponents)
-            players_dict[opponent_2_pos] = random.choice(opponents)
+            player_dict: Dict[int, BasePlayer] = {}
+            player_dict[player_pos] = NEATPlayer("player", net, training=False)
+
+            opponent_1_index, opponent_2_index = random.sample(range(len(opponents)), 2)
+
+            player_dict[opponent_1_pos] = opponents[opponent_1_index]
+            player_dict[opponent_2_pos] = opponents[opponent_2_index]
+
+            # player_dict[opponent_1_pos] = copy.deepcopy(opponents[opponent_1_index])
+            # player_dict[opponent_2_pos] = copy.deepcopy(opponents[opponent_2_index])
+            # player_dict[opponent_1_pos].uuid = "opponent-1"  # type: ignore
+            # player_dict[opponent_2_pos].uuid = "opponent-2"  # type: ignore
 
             # Convert to sorted list
-            players: List[BasePlayer] = [players_dict[i] for i in range(3)]
+            players: List[BasePlayer] = [player_dict[i] for i in range(3)]
 
             # Play each position 100 times, but with same seeds and hence same cards drawn
             player_performances: Dict[str, PlayerStats] = evaluate_performance(
@@ -155,8 +193,8 @@ class NEATModel(BaseModel):
             )
 
             our_average_winnings: float = (
-                player_performances[player_uuid]["winnings"]
-                / player_performances[player_uuid]["num_games"]
+                player_performances["player"]["winnings"]
+                / player_performances["player"]["num_games"]
             )
 
             f1 += our_average_winnings
