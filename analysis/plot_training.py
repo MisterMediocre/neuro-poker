@@ -14,7 +14,8 @@ import numpy as np
 
 # Import neuropoker
 sys.path.append(os.getcwd())
-from neuropoker.models.neat_model import NEATEvolution
+from neuropoker.model_utils import get_model_from_pickle
+from neuropoker.models.neat_model import NEATModel
 
 
 def get_args() -> argparse.Namespace:
@@ -31,13 +32,21 @@ def get_args() -> argparse.Namespace:
         "--model-files",
         type=Path,
         nargs="+",
-        help="Path to the NEAT model files",
+        help="Path to the model files",
         default=[Path("./models/model_0.pkl")],
+    )
+    parser.add_argument(
+        "-n",
+        "--model-names",
+        type=str,
+        nargs="+",
+        help="Names of the models",
+        default=["model_0"],
     )
     return parser.parse_args()
 
 
-def get_model_fitness(model: NEATEvolution) -> np.ndarray:
+def get_model_fitness(model: NEATModel) -> np.ndarray:
     """Get the per-generation fitness of the best genome in each generation.
 
     Parameters:
@@ -59,15 +68,13 @@ def main():
 
     args: Final[argparse.Namespace] = get_args()
     model_files: Final[List[Path]] = args.model_files
+    model_names: Final[List[str]] = args.model_names
     fitnesses: Dict[str, np.ndarray] = {}
 
     # Load the models
-    for model_file in model_files:
-        print(f"Loading model from {model_file}...")
-        with model_file.open("rb") as mf:
-            model: NEATEvolution = pickle.load(mf)
-            model_name: str = model_file.name.replace(".pkl", "")
-            fitnesses[model_name] = get_model_fitness(model)
+    for model_name, model_file in zip(model_names, model_files):
+        model: NEATModel = get_model_from_pickle(model_file)  # type: ignore
+        fitnesses[model_name] = get_model_fitness(model)
 
     # print(model)
     # print(f"Generations: {model.population.generation}")
@@ -77,7 +84,7 @@ def main():
     # print(fitness.shape)
 
     # Plot the fitness
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(dpi=192)
 
     for model_name, fitness in fitnesses.items():
         ax.plot(fitness, label=model_name)
