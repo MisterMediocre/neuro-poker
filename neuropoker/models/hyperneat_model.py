@@ -1,9 +1,11 @@
 """Neuroevolution model that uses HyperNEAT.
 """
 
+from functools import partial
 from pathlib import Path
 from typing import Final, List, Optional, Tuple, Union, override
 
+from neat import Config as NEATConfig
 from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from pureples.hyperneat.hyperneat import create_phenotype_network
@@ -81,6 +83,13 @@ class HyperNEATModel(NEATModel):
             self.hidden_coordinates,
         )
 
+        # Curried function for obtaining the network from a genome
+        self._network_fn = partial(
+            __class__._get_network,
+            config=self.config,
+            substrate=self.substrate,
+        )
+
     @classmethod
     @override
     def from_config(cls, config: NeuropokerConfig) -> "HyperNEATModel":
@@ -108,33 +117,39 @@ class HyperNEATModel(NEATModel):
     def print_config(self) -> None:
         """Print the configuration of this model."""
 
-        print(colored("Model:", color="blue", attrs=["bold"]))
         print(
-            colored(f"{'    Type':<20}", color="blue", attrs=["bold"])
-            + colored(": HyperNEAT", color="blue")
+            colored(
+                "--------------- Model ----------------", color="blue", attrs=["bold"]
+            )
         )
+        print(colored(f"{'Type':<12}: ", color="blue") + "HyperNEAT")
+        print(colored(f"{'NEAT config':<12}: ", color="blue") + f"{self.config_file}")
         print(
-            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
-            + colored(f": {self.config_file}", color="blue")
-        )
-        print(
-            colored(f"{'    Hidden sizes':<20}", color="blue", attrs=["bold"])
-            + colored(f": {self.hidden_sizes}", color="blue")
+            colored(f"{'Hidden layers':<12}: ", color="blue") + f"{self.hidden_sizes}"
         )
         print()
 
+    @staticmethod
     @override
-    def get_network(self, genome: DefaultGenome) -> NEATNetwork:
-        """Get the network from a genome.
+    def _get_network(
+        genome: DefaultGenome,
+        config: NEATConfig,
+        substrate: Optional[Substrate] = None,
+    ) -> NEATNetwork:
+        """Get the network from a genome, statically.
 
         Parameters:
             genome: DefaultGenome
                 The genome to get the network from.
+            config: NEATConfig
+                The NEAT configuration.
+            substrate: Substrate
+                The substrate.
 
         Returns:
             net: NEATNetwork
                 The network.
         """
-        cppn: Final[FeedForwardNetwork] = FeedForwardNetwork.create(genome, self.config)
-        net: Final[RecurrentNetwork] = create_phenotype_network(cppn, self.substrate)
+        cppn: Final[FeedForwardNetwork] = FeedForwardNetwork.create(genome, config)
+        net: Final[RecurrentNetwork] = create_phenotype_network(cppn, substrate)
         return net

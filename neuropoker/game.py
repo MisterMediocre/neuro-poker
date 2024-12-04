@@ -75,63 +75,6 @@ def default_player_stats() -> PlayerStats:
     }
 
 
-def read_game(game_state, events) -> Dict[str, PlayerStats]:
-    """Obtain each player's stats for a game.
-
-    Parameters:
-        game_state: Dict[str, Any]
-            The game state.
-        events: List[Dict[str, Any]]
-            The events of the game.
-
-    Returns:
-        player_stats: Dict[str, PlayerStats]
-            Each player's stats.
-    """
-
-    # print(events)
-
-    player_stats: Dict[str, PlayerStats] = {}
-    players: Final[List[Player]] = game_state["table"].seats.players
-    for player in players:
-        default = default_player_stats()
-        default["uuid"] = player.uuid
-        default["winnings"] = player.stack - STACK
-        default["num_games"] = 1
-
-        # print(player.action_histories)
-        player_stats[player.uuid] = default
-
-    for event in events:
-        if event["type"] == "event_round_finish":
-            # Process action histories to count actions
-            for _street, actions in event["round_state"]["action_histories"].items():
-                for action in actions:
-                    uuid = action["uuid"]
-                    # print(uuid, action["action"])
-                    assert uuid in player_stats
-                    if action["action"] == "FOLD":
-                        player_stats[uuid]["folds"] += 1
-                    elif action["action"] == "CALL":
-                        player_stats[uuid]["calls"] += 1
-                    elif action["action"] == "RAISE":
-                        player_stats[uuid]["raises"] += 1
-                    elif action["action"] == "BIGBLIND":
-                        player_stats[uuid]["big_blinds"] += 1
-                    elif action["action"] == "SMALLBLIND":
-                        player_stats[uuid]["small_blinds"] += 1
-
-            for p in event["round_state"]["seats"]:
-                p: Dict[str, Any]
-                uuid = p["uuid"]
-                assert uuid in player_stats
-                # all-in
-                if p["state"] == "allin":
-                    player_stats[uuid]["allin"] += 1
-
-    return player_stats
-
-
 def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
     """Merge two players' stats into one.
 
@@ -221,7 +164,9 @@ class Game:
 
         # Check that all players have unique UUIDs
         if len(self.players_info) != len(self.players):
-            raise ValueError("Players must have unique UUIDs")
+            raise ValueError(
+                f"Players must have unique UUIDs, received {[p.uuid for p in self.players]}"
+            )
 
         self.cards: Final[List[str]] = cards
         self.max_rounds: Final[int] = max_rounds
@@ -271,10 +216,67 @@ class Game:
             stack=config["stack"],
         )
 
+    def read_game(self, game_state, events) -> Dict[str, PlayerStats]:
+        """Obtain each player's stats for a game.
+
+        Parameters:
+            game_state: Dict[str, Any]
+                The game state.
+            events: List[Dict[str, Any]]
+                The events of the game.
+
+        Returns:
+            player_stats: Dict[str, PlayerStats]
+                Each player's stats.
+        """
+
+        # print(events)
+
+        player_stats: Dict[str, PlayerStats] = {}
+        players: Final[List[Player]] = game_state["table"].seats.players
+        for player in players:
+            default = default_player_stats()
+            default["uuid"] = player.uuid
+            default["winnings"] = player.stack - self.stack
+            default["num_games"] = 1
+
+            # print(player.action_histories)
+            player_stats[player.uuid] = default
+
+        for event in events:
+            if event["type"] == "event_round_finish":
+                # Process action histories to count actions
+                for _street, actions in event["round_state"][
+                    "action_histories"
+                ].items():
+                    for action in actions:
+                        uuid = action["uuid"]
+                        # print(uuid, action["action"])
+                        assert uuid in player_stats
+                        if action["action"] == "FOLD":
+                            player_stats[uuid]["folds"] += 1
+                        elif action["action"] == "CALL":
+                            player_stats[uuid]["calls"] += 1
+                        elif action["action"] == "RAISE":
+                            player_stats[uuid]["raises"] += 1
+                        elif action["action"] == "BIGBLIND":
+                            player_stats[uuid]["big_blinds"] += 1
+                        elif action["action"] == "SMALLBLIND":
+                            player_stats[uuid]["small_blinds"] += 1
+
+                for p in event["round_state"]["seats"]:
+                    p: Dict[str, Any]
+                    uuid = p["uuid"]
+                    assert uuid in player_stats
+                    # all-in
+                    if p["state"] == "allin":
+                        player_stats[uuid]["allin"] += 1
+
+        return player_stats
+
     def play(
         self,
         dealer_button: int = 0,
-        games_played: int = 0,
         seed: Optional[int] = None,
     ) -> Dict[str, PlayerStats]:
         """Play a single round/game of Poker.
@@ -286,7 +288,7 @@ class Game:
                 The number of games previously played.
                 (Used to keep decks unique in each game)
             seed: Optional[int]
-                The seed to use for the game.
+                The seed to use to shuffle the deck.
 
         Returns:
             winnings: List[float]
@@ -300,14 +302,14 @@ class Game:
         # Same seed means same cards dealt
         initial_state["table"].deck = get_deck(
             cards=self.cards,
-            seed=(seed * 100 + games_played if seed is not None else None),
+            seed=seed,
         )
         initial_state["table"].dealer_btn = dealer_button
 
         game_state, _event = self.emulator.start_new_round(initial_state)
         game_state, events = self.emulator.run_until_round_finish(game_state)
 
-        return read_game(game_state, events)
+        return self.read_game(game_state, events)
 
     def play_multiple(
         self, num_games: int = 100, seed: Optional[int] = None
@@ -324,28 +326,24 @@ class Game:
             winnings: List[float]
                 Cumulative winnings of each player.
         """
-        dealer_button: int = 0
+        if num_games <= 0:
+            raise ValueError(f"Number of games must be positive, found {num_games}")
 
-        player_stats = {}
+        player_stats: Dict[str, PlayerStats] = {}
         for player in self.players:
             player_stats[player.uuid] = default_player_stats()
             player_stats[player.uuid]["uuid"] = player.uuid
 
-        for i in range(num_games):
+        for game_i in range(num_games):
             # Play a game
-            round_stats = self.play(
-                dealer_button=dealer_button, seed=seed, games_played=i
+            round_stats: Dict[str, PlayerStats] = self.play(
+                dealer_button=(game_i % len(self.players)),
+                seed=(seed + game_i if seed is not None else None),
             )
 
-            for player_uuid, player_round_stats in round_stats.items():
-                player_stats[player_uuid] = merge(
-                    player_stats[player_uuid], player_round_stats
-                )
+            for uuid, stats in round_stats.items():
+                player_stats[uuid] = merge(player_stats[uuid], stats)
 
             # print("Game", i, "done", round_stats['model_1']['winnings'])
-
-            # Merge player stats
-            # Update dealer button
-            dealer_button = (dealer_button + 1) % len(self.players)
 
         return player_stats

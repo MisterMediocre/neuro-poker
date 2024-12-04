@@ -2,9 +2,11 @@
 """
 
 import json
+from functools import partial
 from pathlib import Path
-from typing import Any, Dict, Final, override
+from typing import Any, Dict, Final, Optional, override
 
+from neat import Config as NEATConfig
 from neat import DefaultGenome
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 from pureples.es_hyperneat.es_hyperneat import ESNetwork
@@ -80,6 +82,14 @@ class ESHyperNEATModel(NEATModel):
         self.es_config_file: Final[Path] = es_config_file
         self.es_config: Final[Dict[str, Any]] = get_es_config(es_config_file)
 
+        # Curried function for obtaining the network from a genome
+        self._network_fn = partial(
+            __class__._get_network,
+            config=self.config,
+            substrate=self.substrate,
+            es_config=self.es_config,
+        )
+
     @classmethod
     @override
     def from_config(cls, config: NeuropokerConfig) -> "ESHyperNEATModel":
@@ -106,35 +116,47 @@ class ESHyperNEATModel(NEATModel):
     @override
     def print_config(self) -> None:
         """Print the configuration of this model."""
-        print(colored("Model:", color="blue", attrs=["bold"]))
         print(
-            colored(f"{'    Type':<20q}", color="blue", attrs=["bold"])
-            + colored(": HyperNEAT", color="blue")
+            colored(
+                "--------------- Model ----------------", color="blue", attrs=["bold"]
+            )
         )
-        print(
-            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
-            + colored(f": {self.config_file}", color="blue")
-        )
-        print(
-            colored(f"{'    ES config':<20}", color="blue", attrs=["bold"])
-            + colored(f": {self.es_config_file}", color="blue")
-        )
+        print(colored(f"{'Type':<12}", color="blue") + ": ES-HyperNEAT")
+        print(colored(f"{'NEAT config':<12}: ", color="blue") + f"{self.config_file}")
+        print(colored(f"{'ES config':<12}: ", color="blue") + f"{self.es_config_file}")
         print()
 
+    @staticmethod
     @override
-    def get_network(self, genome: DefaultGenome) -> NEATNetwork:
-        """Get the network from a genome.
+    def _get_network(
+        genome: DefaultGenome,
+        config: NEATConfig,
+        substrate: Optional[Substrate] = None,
+        es_config: Optional[Dict[str, Any]] = None,
+    ) -> NEATNetwork:
+        """Get the network from a genome, statically.
 
         Parameters:
             genome: DefaultGenome
                 The genome to get the network from.
+            config: Dict[str, Any]
+                The NEAT configuration.
+            substrate: Substrate
+                The substrate.
+            es_config: Dict[str, Any]
+                The ES-HyperNEAT configuration.
 
         Returns:
             net: NEATNetwork
                 The network.
         """
-        cppn: Final[FeedForwardNetwork] = FeedForwardNetwork.create(genome, self.config)
-        es_net: Final[ESNetwork] = ESNetwork(self.substrate, cppn, self.es_config)
+        if substrate is None:
+            raise ValueError("Substrate not provided")
+        if es_config is None:
+            raise ValueError("ES-HyperNEAT config not provided")
+
+        cppn: Final[FeedForwardNetwork] = FeedForwardNetwork.create(genome, config)
+        es_net: Final[ESNetwork] = ESNetwork(substrate, cppn, es_config)
         net: Final[RecurrentNetwork] = es_net.create_phenotype_network()
 
         return net

@@ -49,7 +49,7 @@ def get_model_from_config(config: NeuropokerConfig) -> BaseModel:
         model: BaseModel
             The loaded model.
     """
-    print(colored(f"Creating model from {config.config_file}...", color="blue"))
+    print("Creating model from config...")
     print()
 
     match config["model"]["type"]:
@@ -74,7 +74,7 @@ def get_model_from_pickle(model_file: Path) -> BaseModel:
         model: BaseModel
             The loaded model.
     """
-    print(colored(f"Loading model from {model_file}...", color="blue"))
+    print(f"Loading model from {model_file}...")
     print()
 
     # Check if model file exists
@@ -103,22 +103,23 @@ def save_model_to_pickle(model: BaseModel, model_file: Path) -> None:
         model_file: Path
             The path to the model file.
     """
-    print(colored(f"Saving model to {model_file}...", color="blue"))
+    print(f"Saving model to {model_file}...")
+    print()
 
     # Check if the model file's parent directory exists
     if not model_file.parent.exists():
         print(colored(f"Creating directory {model_file.parent}", color="yellow"))
+        print()
         model_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Check if the model file exists
     if model_file.exists():
         print(colored(f"Overwriting {model_file}", color="yellow"))
+        print()
 
     # Save the model
     with model_file.open("wb") as f:
         pickle.dump(model, f)
-
-    print()
 
 
 def load_model(

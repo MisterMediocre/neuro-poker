@@ -4,7 +4,7 @@ from typing import Any, Dict, Final, List
 
 import numpy as np
 
-from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, get_card_index
+from neuropoker.cards import SHORT_RANKS, SHORT_SUITS, SHORTER_SUITS, get_card_index
 
 # TODO: Remove hardcoding
 STACK: Final[int] = 1000
@@ -48,7 +48,7 @@ def extract_features(
         Number of players
 
     """
-    game_suits: Final[List[str]] = SHORT_SUITS
+    game_suits: Final[List[str]] = SHORTER_SUITS
     game_ranks: Final[List[str]] = SHORT_RANKS
     game_stack: Final[int] = STACK
     num_game_players: Final[int] = NUM_PLAYERS

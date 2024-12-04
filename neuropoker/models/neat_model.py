@@ -68,6 +68,9 @@ class NEATModel(BaseModel):
         self.population.add_reporter(StdOutReporter(True))
         self.population.add_reporter(self.stats)
 
+        # Curried function for obtaining the network from a genome
+        self._network_fn = partial(__class__._get_network, config=self.config)
+
     @classmethod
     @override
     def from_config(cls, config: NeuropokerConfig) -> "NEATModel":
@@ -93,15 +96,13 @@ class NEATModel(BaseModel):
     @override
     def print_config(self) -> None:
         """Print the configuration of this model."""
-        print(colored("Model:", color="blue", attrs=["bold"]))
         print(
-            colored(f"{'    Type':<20}", color="blue", attrs=["bold"])
-            + colored(": HyperNEAT", color="blue")
+            colored(
+                "--------------- Model ----------------", color="blue", attrs=["bold"]
+            )
         )
-        print(
-            colored(f"{'    NEAT config':<20}", color="blue", attrs=["bold"])
-            + colored(f": {self.config_file}", color="blue")
-        )
+        print(colored(f"{'Type':<12}: ", color="blue") + "NEAT")
+        print(colored(f"{'NEAT config':<12}: ", color="blue") + f"{self.config_file}")
         print()
 
     def get_network(self, genome: DefaultGenome) -> NEATNetwork:
@@ -115,7 +116,7 @@ class NEATModel(BaseModel):
             net: NEATNetwork
                 The network.
         """
-        return FeedForwardNetwork.create(genome, self.config)
+        return self._network_fn(genome)
 
     def get_best_genome_network(self) -> NEATNetwork:
         """Get the network from the best genome.
@@ -126,92 +127,38 @@ class NEATModel(BaseModel):
         """
         if self.best_genome is None:
             raise ValueError("No best genome found")
-        return self.get_network(self.best_genome)
 
-    def evaluate_genome(
-        self,
-        genome: DefaultGenome,
-        _neat_config: NEATConfig,
-        opponents: List[BasePlayer],
-        neuropoker_config: NeuropokerConfig,
-        num_games: int = 500,
-        seed: Optional[int] = None,
-    ) -> float:
-        """Evaluate a single genome.
+        return self._network_fn(self.best_genome)
+
+    @staticmethod
+    def _get_network(genome: DefaultGenome, config: NEATConfig) -> NEATNetwork:
+        """Get the network from a genome, statically.
 
         Parameters:
             genome: DefaultGenome
-                The genome to evaluate.
-            _neat_config: NEATConfig
+                The genome to get the network from.
+            config: NEATConfig
                 The NEAT configuration.
-            opponents: List[BasePlayer]
-                The list of opponents to play against.
-            cards: List[str]
-                The set of cards to use in each game.
-            num_games: int
-                The number of games to play in each position.
-            seed: int | None
-                The seed to use for the evaluation.
 
         Returns:
-            fitness: float
-                The fitness of this genome.
+            net: NEATNetwork
+                The network.
         """
-        if len(opponents) < 1:
-            raise ValueError("At least one opponent must be provided")
-
-        # Randomize seed if not provided
-        random.seed(seed if seed is not None else time.time())
-        net: Final[NEATNetwork] = self.get_network(genome)
-
-        f1: float = 0
-        for i in range(3):
-            player_pos: int = i
-            opponent_1_pos: int = (player_pos + 1) % 3
-            opponent_2_pos: int = (player_pos + 2) % 3
-
-            # Initialize players
-            player_dict: Dict[int, BasePlayer] = {}
-            player_dict[player_pos] = NEATPlayer("player", net, training=False)
-
-            # Randomly sample opponents from the opponents list
-            opponent_1_index, opponent_2_index = random.sample(range(len(opponents)), 2)
-            player_dict[opponent_1_pos] = opponents[opponent_1_index]
-            player_dict[opponent_2_pos] = opponents[opponent_2_index]
-
-            # player_dict[opponent_1_pos] = copy.deepcopy(opponents[opponent_1_index])
-            # player_dict[opponent_2_pos] = copy.deepcopy(opponents[opponent_2_index])
-            # player_dict[opponent_1_pos].uuid = "opponent-1"  # type: ignore
-            # player_dict[opponent_2_pos].uuid = "opponent-2"  # type: ignore
-
-            # Convert to sorted list
-            players: List[BasePlayer] = [player_dict[i] for i in range(3)]
-
-            game: Game = Game.from_config(players, neuropoker_config)
-            game_stats: Dict[str, PlayerStats] = game.play_multiple(
-                num_games=num_games, seed=seed
-            )
-
-            our_average_winnings: float = (
-                game_stats["player"]["winnings"] / game_stats["player"]["num_games"]
-            )
-
-            f1 += our_average_winnings
-
-        return f1 / 3
+        return FeedForwardNetwork.create(genome, config)
 
     def run(
         self,
-        opponents: List[BasePlayer],
+        opponents,  # List[PlayerDefinition]
         neuropoker_config: NeuropokerConfig,
         num_generations: int = 50,
-        num_games: int = 500,
+        num_games: int = 400,
+        seed: Optional[int] = None,
         num_cores: int = 1,
     ) -> DefaultGenome:
         """Run evolutionary training to evolve poker players.
 
         Parameters:
-            opponents: List[BasePlayer]
+            opponents: List[PlayerDefinition]
                 The list of opponents to play against.
             neuropoker_config: NeuropokerConfig
                 The game configuration.
@@ -220,6 +167,8 @@ class NEATModel(BaseModel):
             num_games: int
                 The number of games to run to evaluate each genome,
                 in each position, in each generation.
+            seed: int | None
+                The seed to use for the evaluation.
             num_cores: int
                 The number of cores to use in parallel.
 
@@ -227,11 +176,20 @@ class NEATModel(BaseModel):
             best_genome: DefaultGenome
                 The winning genome.
         """
+        # Reset fitness values and recompute them.
+        #
+        # Since our evaluations are stochastic, this will prevent bad
+        # fitness values from being carried over.
+        for genome in self.population.population.values():
+            genome.fitness = None
+
         curried_evaluate_genome = partial(
-            self.evaluate_genome,
+            evaluate_genome,
+            network_fn=self._network_fn,
             opponents=opponents,
             neuropoker_config=neuropoker_config,
             num_games=num_games,
+            seed=seed,
         )
 
         evaluator: Final[ParallelEvaluator] = ParallelEvaluator(
@@ -245,3 +203,76 @@ class NEATModel(BaseModel):
         self.best_genome = best_genome
 
         return best_genome
+
+
+def evaluate_genome(
+    genome: DefaultGenome,
+    _neat_config: NEATConfig,
+    # Curried arguments
+    network_fn,
+    opponents,  # List[PlayerDefinition]
+    neuropoker_config: NeuropokerConfig,
+    num_games: int = 400,
+    seed: Optional[int] = None,
+) -> float:
+    """Evaluate a single genome.
+
+    Parameters:
+        genome: DefaultGenome
+            The genome to evaluate.
+        _neat_config: NEATConfig
+            The NEAT configuration.
+        opponents: List[PlayerDefinition]
+            The list of opponents to play against.
+        cards: List[str]
+            The set of cards to use in each game.
+        num_games: int
+            The number of games to play in each position.
+        seed: int | None
+            The seed to use for the evaluation.
+
+    Returns:
+        fitness: float
+            The fitness of this genome.
+    """
+    if len(opponents) <= 0:
+        raise ValueError("At least one opponent must be provided")
+
+    num_players: Final[int] = neuropoker_config["game"]["players"]
+
+    # Randomize seed if not provided
+    if seed is None:
+        random.seed(time.time())
+        seed = random.randint(0, 1000)
+
+    # Initialize our player
+    player = NEATPlayer("player", network_fn(genome), training=True)
+
+    # Play each position at the table
+    f1: float = 0
+    for i in range(num_players):
+        # Permute player position
+        player_pos: int = i
+
+        # Opponents: Sample with replacement
+        players: List[BasePlayer] = [
+            opp.load(f"opponent-{j}")  # type: ignore
+            for j, opp in enumerate(random.choices(opponents, k=num_players - 1))
+        ]
+
+        # Player: Add at <player_pos>
+        players.insert(player_pos, player)
+
+        # Convert to sorted list
+        game: Game = Game.from_config(players, neuropoker_config)
+        game_stats: Dict[str, PlayerStats] = game.play_multiple(
+            num_games=num_games, seed=seed
+        )
+
+        average_winnings: float = (
+            game_stats["player"]["winnings"] / game_stats["player"]["num_games"]
+        )
+
+        f1 += average_winnings
+
+    return f1 / num_players

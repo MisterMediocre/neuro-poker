@@ -6,32 +6,26 @@ import random
 import time
 from typing import Dict, Final, List
 
+from termcolor import colored
+
 from neuropoker.config import Config
 from neuropoker.game import Game, PlayerStats, default_player_stats, merge
-from neuropoker.player_utils import load_player
+from neuropoker.player_utils import PlayerDefinition
 from neuropoker.players.base_player import BasePlayer
 from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
 
-CATALOG: Final[Dict[str, BasePlayer]] = {
-    # Random players
-    "random": load_player(RandomPlayer, "random"),
-    "random2": load_player(RandomPlayer, "random2"),
-    "random3": load_player(RandomPlayer, "random3"),
-    # Fold players
-    "fold": load_player(FoldPlayer, "fold"),
-    "fold2": load_player(FoldPlayer, "fold2"),
-    "fold3": load_player(FoldPlayer, "fold3"),
-    # Call players
-    "call": load_player(CallPlayer, "call"),
-    "call2": load_player(CallPlayer, "call2"),
-    "call3": load_player(CallPlayer, "call3"),
+CATALOG: Final[Dict[str, PlayerDefinition]] = {
+    # Naive players
+    "random": PlayerDefinition(RandomPlayer),
+    "fold": PlayerDefinition(FoldPlayer),
+    "call": PlayerDefinition(CallPlayer),
     # model_0 has been trained against the fold player, for playing 4-suit 3-player
-    # "model_0": load_player(
-    #     NEATPlayer, "model_0", NEATModel, Path("models/3p_4s/model_0.pkl")
+    # "model_0": PlayerDefinition(
+    #     NEATPlayer, NEATModel, Path("models/3p_4s/model_0.pkl")
     # ),
     # # model_1 has been trained against the call player, for playing 4-suit 3-player
-    # "model_1": load_player(
-    #     NEATPlayer, "model_1", NEATModel, Path("models/3p_3s/model_0.pkl")
+    # "model_1": PlayerDefinition(
+    #     NEATPlayer, NEATModel, Path("models/3p_3s/model_0.pkl")
     # ),
 }
 
@@ -60,20 +54,25 @@ def compete(
             f"({len(player_names)})"
         )
 
-    print("\n\n")
-    print(f"In the competition, the players are: {player_names}")
+    player_names_: Final[List[str]] = [
+        f"{player_name}-{i}" for i, player_name in enumerate(player_names)
+    ]
+
+    print(f"In the competition, the players are: {player_names_}")
     print(f"They play {num_games} games from each position.")
+    print()
 
     players: Final[List[BasePlayer]] = [
-        CATALOG[player_name] for player_name in player_names
+        CATALOG[name_orig].load(name)
+        for name_orig, name in zip(player_names, player_names_)
     ]
 
     performances: Dict[str, PlayerStats]
     performances = {}
-    for i in range(0, 3):
+    for player_name in player_names_:
         default = default_player_stats()
-        default["uuid"] = player_names[i]
-        performances[player_names[i]] = default
+        default["uuid"] = player_name
+        performances[player_name] = default
 
     random.seed(time.time())
     seed = random.randint(0, 1000)
@@ -92,11 +91,15 @@ def compete(
             performances[player_name] = merge(performances[player_name], stats)
 
     for player_name, stats in performances.items():
-        print(player_name)
         print(stats)
-        print("Average winning:", stats["winnings"] / stats["num_games"])
+    print()
 
-    print("\n\n")
+    for player_name, stats in performances.items():
+        print(
+            f"{player_name} avg winnings: {stats["winnings"] / stats["num_games"]:>10.4f}"
+        )
+    print()
+    print()
 
 
 def main():
@@ -107,13 +110,13 @@ def main():
 
     # 3 fold:
     # Expect each player to win 0 on average
-    print("~~~ 3 fold ~~~")
-    compete(["fold", "fold2", "fold3"], config)
+    print(colored("-------- 3 fold --------", color="blue", attrs=["bold"]))
+    compete(["fold", "fold", "fold"], config)
 
     # 3 call:
     # Expect each player to win 0 on average
-    print("~~~ 3 call ~~~")
-    compete(["call", "call2", "call3"], config)
+    print(colored("-------- 3 call --------", color="blue", attrs=["bold"]))
+    compete(["call", "call", "call"], config)
 
     # 1 call + 2 fold:
     #
@@ -121,34 +124,34 @@ def main():
     # - When small blind, will win 50
     # - When big blind, will win 25
     # - When neither, will win 75
-    print("~~~ 1 call + 2 fold ~~~")
-    compete(["call", "fold", "fold2"], config)
+    print(colored("-------- 1 call + 2 fold --------", color="blue", attrs=["bold"]))
+    compete(["call", "fold", "fold"], config)
 
     # 2 call + 1 fold:
     #
     # Expect each call player to win ~50% of the rounds on average.
     # - Each caller wins ~12.5 per game
     # - The fold player loses ~25.0 per game
-    print("~~~ 2 call + 1 fold ~~~")
-    compete(["call", "call2", "fold"], config)
+    print(colored("-------- 2 call + 1 fold --------", color="blue", attrs=["bold"]))
+    compete(["call", "call", "fold"], config)
 
     # Expect to match call player's performance, ie average 50
     # Success
-    # compete("model_0", "fold", "fold2", 30)q.q
+    # compete("model_0", "fold", "fold", 30)q.q
 
     # Expect same as before, since we're invariant to the order of the players
     # Success
-    # compete("fold", "model_0", "fold2", 30)
+    # compete("fold", "model_0", "fold", 30)
 
-    # compete("call", "call2", "call3", 300)
+    # compete("call", "call", "call", 300)
 
     # compete("call", "model_1", "fold", 100)
 
     # Expect the model to fully exploit the folders
-    # compete("model_1", "fold", "fold2", 300)
+    # compete("model_1", "fold", "fold", 300)
 
     # Expect the model to fully exploit the call players
-    # compete("model_1", "call", "call2", 500)
+    # compete("model_1", "call", "call", 500)
 
     # Expect the models to tie, while taking advantage of the fold player
     # compete("model_1", "model_1_2", "fold", 30)
