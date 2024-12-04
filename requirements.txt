@@ -2,4 +2,6 @@ pypokerengine
 matplotlib
 neat-python
 numpy
+termcolor
+toml
 git+https://github.com/ukuleleplayer/pureples.git

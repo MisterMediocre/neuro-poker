@@ -7,14 +7,36 @@ from typing import Final, List, Optional
 from pypokerengine.engine.card import Card
 from pypokerengine.engine.deck import Deck
 
-SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
-SHORTER_SUITS: Final[List[str]] = ["C", "D", "H"]
+# Full stack of cards
+FULL_RANKS: Final[List[str]] = [
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "T",
+    "J",
+    "Q",
+    "K",
+    "A",
+]
+FULL_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
+
+# Short stack of cards, with all 4 suits
 SHORT_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
+
+# Short stack of cards, with only 3 suits
+SHORTER_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+SHORTER_SUITS: Final[List[str]] = ["C", "D", "H"]
 
 
 def get_card_list(
-    suits: Optional[List[str]] = None,
-    ranks: Optional[List[str]] = None,
+    suits: List[str],
+    ranks: List[str],
 ) -> List[str]:
     """Get the list of cards in a full deck of a given set of suits and ranks.
 
@@ -42,19 +64,10 @@ def get_card_list(
         K: King
         A: Ace
     """
-    assert suits is not None
-    assert ranks is not None
-    # if suits is None:
-        # suits = SHORT_SUITS
-    if ranks is None:
-        ranks = SHORT_RANKS
-
-    return [f"{suite}{rank}" for suite in suits for rank in ranks]
+    return [f"{suit}{rank}" for suit in suits for rank in ranks]
 
 
-def get_card_index(
-    card: str, ranks: Optional[List[str]] = None, suits: Optional[List[str]] = None
-) -> int:
+def get_card_index(card: str, suits: List[str], ranks: List[str]) -> int:
     """Get the index of a card in a deck of cards.
 
     Parameters:
@@ -69,13 +82,6 @@ def get_card_index(
         index: int
             The index of the card.
     """
-    assert suits is not None
-    assert ranks is not None
-    if ranks is None:
-        ranks = SHORT_RANKS
-    if suits is None:
-        suits = SHORT_SUITS
-
     if len(card) != 2:
         raise ValueError("Card must be a 2-character string.")
 
@@ -98,8 +104,10 @@ def get_deck(cards: List[str] = [], seed: Optional[int] = None) -> Deck:
     assert len(cards) > 0
 
     card_ids: Final[List[int]] = [Card.from_str(s).to_id() for s in cards]
+
     if seed is not None:
         # print("Seed used: ", seed)
         random.seed(seed)  # Ignoring the seed as a test
-        random.shuffle(card_ids)
+
+    random.shuffle(card_ids)
     return Deck(cheat=True, cheat_card_ids=card_ids)
