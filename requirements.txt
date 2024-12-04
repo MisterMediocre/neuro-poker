@@ -3,3 +3,4 @@ matplotlib
 neat-python
 numpy
 git+https://github.com/ukuleleplayer/pureples.git
+stable-baselines3

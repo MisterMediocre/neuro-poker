@@ -14,6 +14,7 @@ from neuropoker.game import (
 )
 from neuropoker.model import load_player
 from neuropoker.players.base import BasePlayer
+from gym_env import load_model_player
 
 CATALOG: Final[Dict[str, BasePlayer]] = {
     # Random players
@@ -33,6 +34,14 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
     # model_1 has been trained against the call player, for playing 4-suit 3-player
     # "model_1": load_player("models/3p_4s/model_1.pkl", "model_1"),
     "model_1": load_player("models/3p_3s/model_0.pkl", "model_1"),
+
+    "sb_backup": load_model_player("models/3p_3s/sb_backup", "sb_backup"),
+    "sb": load_model_player("models/3p_3s/sb", "sb"),
+    "sb2": load_model_player("models/3p_3s/sb2", "sb2"),
+    "sb3": load_model_player("models/3p_3s/sb3", "sb3"),
+    "sb4": load_model_player("models/3p_3s/sb4", "sb4"),
+    "sb5": load_model_player("models/3p_3s/sb5", "sb5"),
+    "sb6": load_model_player("models/3p_3s/sb6", "sb6"),
 }
 
 
@@ -69,7 +78,8 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
 
 
     random.seed(time.time())
-    seed = random.randint(0, 1000)
+    seed = -2
+    # We never train on negative seeds
     for i in range(0, 3):
         # Shift the players to the left
         player_names_i = player_names[i:] + player_names[:i]
@@ -117,7 +127,30 @@ def main():
 
     # Expect the model to fully exploit the call players
     compete("call", "call2", "call3", 100)
-    compete("model_1", "call", "call2", 500)
+    # compete("model_1", "call", "call2", 500)
+    # compete("sb", "call", "call3", 1000)
+    # compete("sb_backup", "call", "call3", 1000)
+
+
+    # compete("sb2", "call", "call3", 3000)
+    # compete("sb3", "call", "call3", 3000)
+
+    # compete("sb3",  "sb2", "call3", 3000)
+    # compete("sb2",  "sb3", "call3", 3000)
+
+    # compete("sb4",  "call", "call3", 3000)
+    # compete("sb4", "sb3", "sb2", 3000)
+    # compete("sb4", "sb3", "sb2", 3000)
+
+    # compete("sb5", "call", "call3", 3000)
+    # compete("sb5", "sb4", "sb3", 3000)
+    # compete("sb5", "sb3", "sb2", 3000)
+    # compete("sb5", "sb2", "call3", 3000)
+
+    compete("sb6", "call", "call3", 3000)
+    compete("sb6", "sb5", "sb4", 3000)
+    compete("sb6", "sb3", "sb2", 3000)
+
 
     # Expect the models to tie, while taking advantage of the fold player
     # compete("model_1", "model_1_2", "fold", 30)
