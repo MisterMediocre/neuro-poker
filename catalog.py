@@ -4,15 +4,20 @@
 """
 import random
 import time
+from pathlib import Path
 from typing import Dict, Final, List
 
 from termcolor import colored
 
 from neuropoker.config import Config
 from neuropoker.game import Game, PlayerStats, default_player_stats, merge
+from neuropoker.models.es_hyperneat_model import ESHyperNEATModel
+from neuropoker.models.hyperneat_model import HyperNEATModel
+from neuropoker.models.neat_model import NEATModel
 from neuropoker.player_utils import PlayerDefinition
 from neuropoker.players.base_player import BasePlayer
 from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat_player import NEATPlayer
 
 CATALOG: Final[Dict[str, PlayerDefinition]] = {
     # Naive players
@@ -20,6 +25,15 @@ CATALOG: Final[Dict[str, PlayerDefinition]] = {
     "fold": PlayerDefinition(FoldPlayer),
     "call": PlayerDefinition(CallPlayer),
     # model_0 has been trained against the fold player, for playing 4-suit 3-player
+    "3p_3s_neat": PlayerDefinition(
+        NEATPlayer, NEATModel, Path("models/3p_3s_neat__call__1000g.pkl")
+    ),
+    "3p_3s_hyperneat": PlayerDefinition(
+        NEATPlayer, HyperNEATModel, Path("models/3p_3s_hyperneat__call__1000g.pkl")
+    ),
+    "3p_3s_es-hyperneat": PlayerDefinition(
+        NEATPlayer, ESHyperNEATModel, Path("models/3p_3s_es-hyperneat__call__1000g.pkl")
+    ),
     # "model_0": PlayerDefinition(
     #     NEATPlayer, NEATModel, Path("models/3p_4s/model_0.pkl")
     # ),
@@ -96,7 +110,7 @@ def compete(
 
     for player_name, stats in performances.items():
         print(
-            f"{player_name} avg winnings: {stats["winnings"] / stats["num_games"]:>10.4f}"
+            f"{player_name:20} avg winnings: {stats["winnings"] / stats["num_games"]:>10.4f}"
         )
     print()
     print()
@@ -106,7 +120,7 @@ def main():
     """Run the script."""
 
     # TODO: Configure config at runtime
-    config: Final[Config] = Config("configs/3p_4s_neat.toml")
+    config: Final[Config] = Config("configs/3p_3s_neat.toml")
 
     # 3 fold:
     # Expect each player to win 0 on average
@@ -135,9 +149,20 @@ def main():
     print(colored("-------- 2 call + 1 fold --------", color="blue", attrs=["bold"]))
     compete(["call", "call", "fold"], config)
 
-    # Expect to match call player's performance, ie average 50
-    # Success
-    # compete("model_0", "fold", "fold", 30)q.q
+    # NEAT + 2 call:
+    #
+    print(colored("-------- NEAT + 2 call --------", color="blue", attrs=["bold"]))
+    compete(["3p_3s_neat", "call", "call"], config)
+
+    # HyperNEAT + 2call:
+    print(colored("-------- HyperNEAT + 2 call --------", color="blue", attrs=["bold"]))
+    compete(["3p_3s_hyperneat", "call", "call"], config)
+
+    # ES-HyperNEAT + 2call:
+    print(
+        colored("-------- ES-HyperNEAT + 2 call --------", color="blue", attrs=["bold"])
+    )
+    compete(["3p_3s_es-hyperneat", "call", "call"], config)
 
     # Expect same as before, since we're invariant to the order of the players
     # Success

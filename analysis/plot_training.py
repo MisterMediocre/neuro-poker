@@ -4,7 +4,6 @@
 """
 import argparse
 import os
-import pickle
 import sys
 from pathlib import Path
 from typing import Dict, Final, List
@@ -61,10 +60,7 @@ def get_model_fitness(model: NEATModel) -> np.ndarray:
 
 
 def main():
-    """Plot the convergence of the NEAT model.
-
-    TODO: Validate results against an actual run.
-    """
+    """Plot the convergence of the NEAT model."""
 
     args: Final[argparse.Namespace] = get_args()
     model_files: Final[List[Path]] = args.model_files
@@ -99,7 +95,7 @@ def main():
     plot_dir: Final[Path] = Path("plots")
     plot_dir.mkdir(exist_ok=True)
 
-    plot_file: Final[Path] = plot_dir / f"fitness.png"
+    plot_file: Final[Path] = plot_dir / "fitness.png"
     print(f"Saving plot to {plot_file}...")
     plt.savefig(plot_file)
 
