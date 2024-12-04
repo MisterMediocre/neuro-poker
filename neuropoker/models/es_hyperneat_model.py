@@ -18,6 +18,9 @@ from neuropoker.models.hyperneat_model import CoordinateList
 from neuropoker.models.neat_model import NEATModel
 from neuropoker.players.neat_player import NEATNetwork
 
+DEFAULT_INPUT_SIZE: Final[int] = 73
+DEFAULT_OUTPUT_SIZE: Final[int] = 5
+
 
 def get_es_config(es_config_file: Path) -> Dict[str, Any]:
     """Get the ES-HyperNEAT configuration.
@@ -41,6 +44,8 @@ class ESHyperNEATModel(NEATModel):
         self,
         neat_config_file: Path = Path("config/3p_4s_neat.txt"),
         es_config_file: Path = Path("config/3p_4s_es.json"),
+        input_size: int = DEFAULT_INPUT_SIZE,
+        output_size: int = DEFAULT_OUTPUT_SIZE,
     ) -> None:
         """Create a HyperNEAT neuroevolution model.
 
@@ -49,12 +54,15 @@ class ESHyperNEATModel(NEATModel):
                 The path to the NEAT configuration file.
             es_config_file: Path
                 The path to the ES-HyperNEAT configuration file.
+            input_size: int
+                The number of input nodes.
+            output_size: int
+                The number of output nodes.
         """
         super().__init__(neat_config_file=neat_config_file)
 
-        # TODO: Don't hardcode input and output dimensionality
-        self.input_dims: Final[int] = 80  # Number of features
-        self.output_dims: Final[int] = 6  # Number of actions
+        self.input_size: Final[int] = input_size  # Number of features
+        self.output_size: Final[int] = output_size  # Number of actions
 
         # Input coordinates
         #
@@ -63,14 +71,14 @@ class ESHyperNEATModel(NEATModel):
         #
         # Evenly spaced between (0, 0) and (0, 1)
         self.input_coordinates: Final[CoordinateList] = [
-            (0.0, i / self.input_dims) for i in range(self.input_dims)
+            (0.0, i / self.input_size) for i in range(self.input_size)
         ]
 
         # Output coordinates
         #
         # Evenly spaced between (0, 0) and (0, 1)
         self.output_coordinates: Final[CoordinateList] = [
-            (0.0, i / self.output_dims) for i in range(self.output_dims)
+            (0.0, i / self.output_size) for i in range(self.output_size)
         ]
 
         self.substrate: Final[Substrate] = Substrate(
@@ -111,6 +119,8 @@ class ESHyperNEATModel(NEATModel):
         return ESHyperNEATModel(
             neat_config_file=config["neat_config_file"],
             es_config_file=config["es_config_file"],
+            input_size=config["input_size"],
+            output_size=config["output_size"],
         )
 
     @override

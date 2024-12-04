@@ -1,0 +1,24 @@
+# 3-player, 4-suit model trained using ES-HyperNEAT.
+#
+# Training command:
+# ./train.py -m ./configs/3p_4s_hyperneat.toml \
+#      -g <NUM_GENERATIONS>
+#      -o <OPPONENT_NAMES>
+#      -f <MODEL_FILE>
+#      -c <NUM_CORES>
+
+[game]
+suits = ['C', 'D', 'H', 'S']
+ranks = ['6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+players = 3
+rounds = 1
+small_blind = 25
+big_blind = 50
+stack = 1000
+
+[model]
+type = "es-hyperneat"
+neat_config_file = "configs/3p_4s_hyperneat.txt"
+es_config_file = "configs/3p_4s_es-hyperneat.json"
+input_size = 91
+output_size = 6
