@@ -2,7 +2,7 @@
 """
 
 import random
-from typing import Final, List, Optional
+from typing import Final, List, Optional, Tuple
 
 from pypokerengine.engine.card import Card
 from pypokerengine.engine.deck import Deck
@@ -86,6 +86,11 @@ def get_card_index(card: str, suits: List[str], ranks: List[str]) -> int:
         raise ValueError("Card must be a 2-character string.")
 
     return ranks.index(card[1]) + suits.index(card[0]) * len(ranks)
+
+
+# (rank, suit)
+def get_card_indices(card, ranks, suits) -> Tuple[int, int]:
+    return ranks.index(card[1]), suits.index(card[0])
 
 
 def get_deck(cards: List[str] = [], seed: Optional[int] = None) -> Deck:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-"""Run a catalog of poker games with different players.
-"""
+"""Run a catalog of poker games with different players."""
+
 import random
 import time
 from pathlib import Path
@@ -9,8 +9,14 @@ from typing import Dict, Final, List
 
 from termcolor import colored
 
+from gym_env import load_model_player
 from neuropoker.config import Config
-from neuropoker.game import Game, PlayerStats, default_player_stats, merge
+from neuropoker.game import (
+    Game,
+    PlayerStats,
+    default_player_stats,
+    merge,
+)
 from neuropoker.models.es_hyperneat_model import ESHyperNEATModel
 from neuropoker.models.hyperneat_model import HyperNEATModel
 from neuropoker.models.neat_model import NEATModel
@@ -24,23 +30,28 @@ CATALOG: Final[Dict[str, PlayerDefinition]] = {
     "random": PlayerDefinition(RandomPlayer),
     "fold": PlayerDefinition(FoldPlayer),
     "call": PlayerDefinition(CallPlayer),
-    # model_0 has been trained against the fold player, for playing 4-suit 3-player
+    # SB players
+    "sb": load_model_player("models/3p_3s/sb", "sb"),
+    "sb2": load_model_player("models/3p_3s/sb2", "sb2"),
+    "sb3": load_model_player("models/3p_3s/sb3", "sb3"),
+    "sb4": load_model_player("models/3p_3s/sb4", "sb4"),
+    "sb5": load_model_player("models/3p_3s/sb5", "sb5"),
+    "sb6": load_model_player("models/3p_3s/sb6", "sb6"),
+    "sb_backup": load_model_player("models/3p_3s/sb_backup", "sb_backup"),
+    # Neuroevolution players trained against Call player
     "3p_3s_neat": PlayerDefinition(
-        NEATPlayer, NEATModel, Path("models/3p_3s_neat__call__1000g.pkl")
+        NEATPlayer, NEATModel, Path("models/3p_3s/3p_3s_neat__call__1000g.pkl")
     ),
     "3p_3s_hyperneat": PlayerDefinition(
-        NEATPlayer, HyperNEATModel, Path("models/3p_3s_hyperneat__call__1000g.pkl")
+        NEATPlayer,
+        HyperNEATModel,
+        Path("models/3p_3s/3p_3s_hyperneat__call__1000g.pkl"),
     ),
     "3p_3s_es-hyperneat": PlayerDefinition(
-        NEATPlayer, ESHyperNEATModel, Path("models/3p_3s_es-hyperneat__call__1000g.pkl")
+        NEATPlayer,
+        ESHyperNEATModel,
+        Path("models/3p_3s/3p_3s_es-hyperneat__call__1000g.pkl"),
     ),
-    # "model_0": PlayerDefinition(
-    #     NEATPlayer, NEATModel, Path("models/3p_4s/model_0.pkl")
-    # ),
-    # # model_1 has been trained against the call player, for playing 4-suit 3-player
-    # "model_1": PlayerDefinition(
-    #     NEATPlayer, NEATModel, Path("models/3p_3s/model_0.pkl")
-    # ),
 }
 
 
@@ -166,20 +177,34 @@ def main():
 
     # Expect same as before, since we're invariant to the order of the players
     # Success
-    # compete("fold", "model_0", "fold", 30)
-
-    # compete("call", "call", "call", 300)
-
-    # compete("call", "model_1", "fold", 100)
+    compete(["fold", "model_0", "fold"], config, num_games=30)
+    compete(["call", "call", "call"], config, num_games=300)
+    compete(["call", "model_1", "fold"], config, num_games=100)
 
     # Expect the model to fully exploit the folders
-    # compete("model_1", "fold", "fold", 300)
+    compete(["model_1", "fold", "fold"], config, num_games=300)
 
     # Expect the model to fully exploit the call players
-    # compete("model_1", "call", "call", 500)
+    compete(["model_1", "call", "call"], config, num_games=500)
+    compete(["sb", "call", "call"], config, num_games=1000)
+    compete(["sb_backup", "call", "call"], config, num_games=1000)
+    compete(["sb2", "call", "call"], config, num_games=3000)
+    compete(["sb3", "call", "call"], config, num_games=3000)
+    compete(["sb3", "sb2", "call"], config, num_games=3000)
+    compete(["sb2", "sb3", "call"], config, num_games=3000)
+    compete(["sb4", "call", "call"], config, num_games=3000)
+    compete(["sb4", "sb3", "sb2"], config, num_games=3000)
+    compete(["sb4", "sb3", "sb2"], config, num_games=3000)
+    compete(["sb5", "call", "call"], config, num_games=3000)
+    compete(["sb5", "sb4", "sb3"], config, num_games=3000)
+    compete(["sb5", "sb3", "sb2"], config, num_games=3000)
+    compete(["sb5", "sb2", "call"], config, num_games=3000)
+    compete(["sb6", "call", "call"], config, num_games=3000)
+    compete(["sb6", "sb5", "sb4"], config, num_games=3000)
+    compete(["sb6", "sb3", "sb2"], config, num_games=3000)
 
     # Expect the models to tie, while taking advantage of the fold player
-    # compete("model_1", "model_1_2", "fold", 30)
+    compete(["model_1", "model_1", "fold"], config, num_games=30)
 
 
 if __name__ == "__main__":
