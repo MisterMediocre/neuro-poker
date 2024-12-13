@@ -1,5 +1,4 @@
-"""Neuroevolution model that uses NEAT.
-"""
+"""Neuroevolution model that uses NEAT."""
 
 import random
 import time
@@ -21,11 +20,11 @@ from neat.nn import FeedForwardNetwork
 from neat.parallel import ParallelEvaluator
 from termcolor import colored
 
-from neuropoker.config import Config as NeuropokerConfig
-from neuropoker.game import Game, PlayerStats
-from neuropoker.models.base_model import BaseModel
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.neat_player import NEATNetwork, NEATPlayer
+from neuropoker.extra.config import Config as NeuropokerConfig
+from neuropoker.game.game import Game, PlayerStats
+from neuropoker.models.base import BaseModel
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.neat import NEATNetwork, NEATPlayer
 
 
 class NEATModel(BaseModel):

@@ -6,11 +6,11 @@ from typing import Dict, Final, Optional, Type
 
 from termcolor import colored
 
-from neuropoker.config import Config as NeuropokerConfig
-from neuropoker.models.base_model import BaseModel, ModelT
-from neuropoker.models.es_hyperneat_model import ESHyperNEATModel
-from neuropoker.models.hyperneat_model import HyperNEATModel
-from neuropoker.models.neat_model import NEATModel
+from neuropoker.extra.config import Config as NeuropokerConfig
+from neuropoker.models.base import BaseModel, ModelT
+from neuropoker.models.neat.es_hyperneat import ESHyperNEATModel
+from neuropoker.models.neat.hyperneat import HyperNEATModel
+from neuropoker.models.neat.neat import NEATModel
 
 MODEL_TYPES: Final[Dict[str, Type[BaseModel]]] = {
     "neat": NEATModel,

@@ -1,5 +1,4 @@
-"""Neuroevolution model that uses HyperNEAT.
-"""
+"""Neuroevolution model that uses HyperNEAT."""
 
 from functools import partial
 from pathlib import Path
@@ -12,9 +11,9 @@ from pureples.hyperneat.hyperneat import create_phenotype_network
 from pureples.shared.substrate import Substrate
 from termcolor import colored
 
-from neuropoker.config import Config as NeuropokerConfig
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.players.neat_player import NEATNetwork
+from neuropoker.extra.config import Config as NeuropokerConfig
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.players.neat import NEATNetwork
 
 DEFAULT_INPUT_SIZE: Final[int] = 73
 DEFAULT_OUTPUT_SIZE: Final[int] = 5

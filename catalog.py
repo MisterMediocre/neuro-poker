@@ -10,20 +10,20 @@ from typing import Dict, Final, List
 from termcolor import colored
 
 from gym_env import load_model_player
-from neuropoker.config import Config
-from neuropoker.game import (
+from neuropoker.extra.config import Config
+from neuropoker.game.game import (
     Game,
     PlayerStats,
     default_player_stats,
     merge,
 )
-from neuropoker.models.es_hyperneat_model import ESHyperNEATModel
-from neuropoker.models.hyperneat_model import HyperNEATModel
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.player_utils import PlayerDefinition
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.players.neat_player import NEATPlayer
+from neuropoker.models.neat.es_hyperneat import ESHyperNEATModel
+from neuropoker.models.neat.hyperneat import HyperNEATModel
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat import NEATPlayer
+from neuropoker.players.utils import PlayerDefinition
 
 CATALOG: Final[Dict[str, PlayerDefinition]] = {
     # Naive players

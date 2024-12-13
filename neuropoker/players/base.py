@@ -1,8 +1,7 @@
-"""Base class for poker players.
-"""
+"""Base class for poker players."""
 
 from abc import ABC, abstractmethod
-from typing import Final, Tuple, Type, TypeVar
+from typing import Final, Tuple, TypeVar
 
 from pypokerengine.players import BasePokerPlayer
 

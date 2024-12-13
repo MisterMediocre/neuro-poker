@@ -11,11 +11,11 @@ from pypokerengine.engine.poker_constants import PokerConstants as Const
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.ppo.ppo import PPO
 
-from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
-from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, get_deck
-from neuropoker.game_utils import NUM_PLAYERS, STACK, extract_features
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.naive_player import CallPlayer
+from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, get_deck
+from neuropoker.game.utils import NUM_PLAYERS, STACK, extract_features
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer
 
 
 def int_to_action(i, valid_actions):

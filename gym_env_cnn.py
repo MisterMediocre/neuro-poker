@@ -13,16 +13,16 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.ppo.ppo import PPO
 
-from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
-from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, get_deck
-from neuropoker.game_utils import (
+from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, get_deck
+from neuropoker.game.utils import (
     NUM_PLAYERS,
     STACK,
     extract_features,
     extract_features_tensor,
 )
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.naive_player import CallPlayer
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer
 
 
 class PokerCNNExtractor(BaseFeaturesExtractor):

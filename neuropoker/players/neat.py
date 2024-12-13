@@ -1,14 +1,13 @@
-"""Poker player which is learned through NEAT neuroevolution.
-"""
+"""Poker player which is learned through NEAT neuroevolution."""
 
 from typing import Final, Optional, Tuple, Union
 
 import numpy as np
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 
-from neuropoker.game_utils import extract_features
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.naive_player import RandomPlayer
+from neuropoker.game.utils import extract_features
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import RandomPlayer
 
 NEATNetwork = Union[FeedForwardNetwork, RecurrentNetwork]
 

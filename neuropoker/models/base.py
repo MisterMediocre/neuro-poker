@@ -1,11 +1,9 @@
-"""Base class for neuroevolution models.
-"""
+"""Base class for neuroevolution models."""
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Type, TypeVar
 
-from neuropoker.config import Config as NeuropokerConfig
+from neuropoker.extra.config import Config as NeuropokerConfig
 
 ModelT = TypeVar("ModelT", bound="BaseModel")
 

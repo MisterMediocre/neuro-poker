@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-"""Run NEAT to neuro-evolve poker players using self-play.
-"""
+"""Run NEAT to neuro-evolve poker players using self-play."""
 
 import argparse
 import os
@@ -10,15 +9,17 @@ from typing import Final, List
 
 from termcolor import colored
 
-from neuropoker.config import Config
-from neuropoker.model_utils import (
+from neuropoker.extra.config import Config
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.models.utils import (
     get_model_from_config,
     get_model_from_pickle,
     save_model_to_pickle,
 )
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.player_utils import PlayerDefinition, player_type_from_string
-from neuropoker.players.base_player import BasePlayer
+from neuropoker.players.utils import (
+    PlayerDefinition,
+    player_type_from_string,
+)
 
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_4s_neat.toml")
 DEFAULT_MODEL_FILE: Final[Path] = Path("models/neat_poker.pkl")

@@ -4,7 +4,7 @@ from typing import Any, Dict, Final, List
 
 import numpy as np
 
-from neuropoker.cards import (
+from neuropoker.game.cards import (
     SHORT_RANKS,
     SHORTER_SUITS,
     get_card_index,

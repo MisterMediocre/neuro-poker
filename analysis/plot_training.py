@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-"""Plot convergence of the NEAT model as it trains.
-"""
+"""Plot convergence of the NEAT model as it trains."""
+
 import argparse
 import os
 import sys
@@ -13,8 +13,8 @@ import numpy as np
 
 # Import neuropoker
 sys.path.append(os.getcwd())
-from neuropoker.model_utils import get_model_from_pickle
-from neuropoker.models.neat_model import NEATModel
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.models.utils import get_model_from_pickle
 
 
 def get_args() -> argparse.Namespace:

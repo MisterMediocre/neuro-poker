@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Final, Optional, Type
 
-from neuropoker.model_utils import load_model
-from neuropoker.models.base_model import BaseModel
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.players.base_player import BasePlayer
-from neuropoker.players.naive_player import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.players.neat_player import NEATPlayer
+from neuropoker.models.base import BaseModel
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.models.utils import load_model
+from neuropoker.players.base import BasePlayer
+from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
+from neuropoker.players.neat import NEATPlayer
 
 PLAYER_TYPES: Final[Dict[str, Type[BasePlayer]]] = {
     "fold": FoldPlayer,

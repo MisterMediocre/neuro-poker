@@ -1,5 +1,4 @@
-"""Neuroevolution model that uses ES-HyperNEAT.
-"""
+"""Neuroevolution model that uses ES-HyperNEAT."""
 
 import json
 from functools import partial
@@ -13,10 +12,10 @@ from pureples.es_hyperneat.es_hyperneat import ESNetwork
 from pureples.shared.substrate import Substrate
 from termcolor import colored
 
-from neuropoker.config import Config as NeuropokerConfig
-from neuropoker.models.hyperneat_model import CoordinateList
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.players.neat_player import NEATNetwork
+from neuropoker.extra.config import Config as NeuropokerConfig
+from neuropoker.models.neat.hyperneat import CoordinateList
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.players.neat import NEATNetwork
 
 DEFAULT_INPUT_SIZE: Final[int] = 73
 DEFAULT_OUTPUT_SIZE: Final[int] = 5

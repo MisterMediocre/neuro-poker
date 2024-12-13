@@ -1,15 +1,14 @@
-"""Classes and functions for poker games.
-"""
+"""Classes and functions for poker games."""
 
 from typing import Any, Dict, Final, List, Optional, TypedDict
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
 
-from neuropoker.cards import get_card_list, get_deck
-from neuropoker.config import Config
-from neuropoker.game_utils import NUM_PLAYERS
-from neuropoker.players.base_player import BasePlayer
+from neuropoker.extra.config import Config
+from neuropoker.game.cards import get_card_list, get_deck
+from neuropoker.game.utils import NUM_PLAYERS
+from neuropoker.players.base import BasePlayer
 
 # TODO: Un-hardcode these constants
 SMALL_BLIND_AMOUNT: Final[int] = 25

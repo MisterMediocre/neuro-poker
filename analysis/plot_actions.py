@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 
-"""Plot the actions of a model based on its hand at the dealer position.
-"""
+"""Plot the actions of a model based on its hand at the dealer position."""
+
 import argparse
 import itertools
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Final, Generator, List
+from typing import Final, Generator, List
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 # Import neuropoker
 sys.path.append(os.getcwd())
-from neuropoker.cards import get_card_list
-from neuropoker.config import Config
-from neuropoker.model_utils import get_model_from_pickle
-from neuropoker.models.neat_model import NEATModel
-from neuropoker.players.neat_player import NEATPlayer
+from neuropoker.extra.config import Config
+from neuropoker.game.cards import get_card_list
+from neuropoker.models.neat.neat import NEATModel
+from neuropoker.models.utils import get_model_from_pickle
+from neuropoker.players.neat import NEATPlayer
 
 
 def get_args() -> argparse.Namespace:

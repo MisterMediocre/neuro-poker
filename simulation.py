@@ -4,11 +4,12 @@
 
 TODO: Fill out script, add more options, etc.
 """
+
 from typing import Final
 
-from neuropoker.config import Config
-from neuropoker.game import Game
-from neuropoker.players.naive_player import CallPlayer, RandomPlayer
+from neuropoker.extra.config import Config
+from neuropoker.game.game import Game
+from neuropoker.players.naive import CallPlayer, RandomPlayer
 
 
 def main() -> None:

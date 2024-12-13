@@ -1,10 +1,9 @@
-"""Naive poker players with simple policies (e.g. always fold/call).
-"""
+"""Naive poker players with simple policies (e.g. always fold/call)."""
 
 import random
 from typing import Tuple
 
-from neuropoker.players.base_player import BasePlayer
+from neuropoker.players.base import BasePlayer
 
 
 class RandomPlayer(BasePlayer):
