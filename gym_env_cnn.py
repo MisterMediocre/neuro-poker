@@ -1,32 +1,29 @@
-import gymnasium as gym
-from gymnasium import spaces
-import numpy as np
-import torch
 import random
 import time
 
-from pypokerengine.engine.card import Card
-from pypokerengine.engine.player import Player
-from pypokerengine.engine.table import Table
-
-
-from neuropoker.cards import SHORT_SUITS, get_card_list, SHORT_RANKS, SHORTER_SUITS
-from neuropoker.game_utils import NUM_PLAYERS, STACK, STREET_MAPPING, extract_features, extract_features_tensor
-from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT
-from neuropoker.game import get_deck
-from neuropoker.players.naive import CallPlayer, FoldPlayer
-from neuropoker.players.base import BasePlayer
-
+import gym
+import numpy as np
+import torch
+import torch.nn as nn
+from gym import spaces
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.engine.poker_constants import PokerConstants as Const
-
-from stable_baselines3.ppo.ppo import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
-
-
-import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.ppo.ppo import PPO
+
+from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, get_deck
+from neuropoker.game_utils import (
+    NUM_PLAYERS,
+    STACK,
+    extract_features,
+    extract_features_tensor,
+)
+from neuropoker.players.base_player import BasePlayer
+from neuropoker.players.naive_player import CallPlayer
+
 
 class PokerCNNExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space, features_dim=256):
@@ -37,7 +34,9 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
 
         # Define the CNN layers
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),  # Conv Layer 1
+            nn.Conv2d(
+                n_input_channels, 32, kernel_size=3, stride=1, padding=1
+            ),  # Conv Layer 1
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Conv Layer 2
             nn.ReLU(),
@@ -60,8 +59,6 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
         return self.fc(x)
 
 
-
-
 def int_to_action(i, valid_actions):
     if i == 0:
         return "fold", 0
@@ -69,7 +66,7 @@ def int_to_action(i, valid_actions):
         return "call", valid_actions[1]["amount"]
     elif i == 2:
         return "raise", valid_actions[2]["amount"]["min"]
-    elif i == 3 or i == 4 :
+    elif i == 3 or i == 4:
         return "raise", valid_actions[2]["amount"]["min"] * 2
     else:
         raise ValueError("Invalid action")
@@ -78,6 +75,7 @@ def int_to_action(i, valid_actions):
 def load_model_player(model_path, uuid):
     model = PPO.load(model_path)
     return ModelPlayer(model, uuid)
+
 
 class ModelPlayer(BasePlayer):
     def __init__(self, model, uuid):
@@ -91,11 +89,12 @@ class ModelPlayer(BasePlayer):
 
 
 class PokerEnv(gym.Env):
-    def __init__(self, opponent1:BasePlayer , opponent2: BasePlayer):
+    def __init__(self, opponent1: BasePlayer, opponent2: BasePlayer):
         num_cards = len(SHORTER_SUITS) * len(SHORT_RANKS)
-        self.observation_space = spaces.Box(low=0, high=3, shape=(4, 8, num_cards), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=0, high=3, shape=(4, 8, num_cards), dtype=np.float32
+        )
         self.action_space = spaces.Discrete(5)
-
 
         self.num_games = 0
         self.total_reward = 0
@@ -104,24 +103,29 @@ class PokerEnv(gym.Env):
 
         self.emulator = Emulator()
         self.emulator.set_game_rule(
-            NUM_PLAYERS, 
+            NUM_PLAYERS,
             STACK,
             SMALL_BLIND_AMOUNT,
-            0, # NO ANTE
+            0,  # NO ANTE
         )
 
         self.players = [BasePlayer(), opponent1, opponent2]
         self.player_names = ["me", "opponent1", "opponent"]
-        self.players_info = {name: {"stack": STACK, "name": name, "uuid": name } for name in self.player_names}
+        self.players_info = {
+            name: {"stack": STACK, "name": name, "uuid": name}
+            for name in self.player_names
+        }
 
         self.cards = get_card_list(SHORTER_SUITS, SHORT_RANKS)
 
-        self.initial_state = self.emulator.generate_initial_game_state(self.players_info)
+        self.initial_state = self.emulator.generate_initial_game_state(
+            self.players_info
+        )
 
         random.seed(time.time())
         self.seed = random.randint(0, 10000)
         print("SEED:", self.seed)
-        
+
         self.reset()
 
     def keep_playing(self, break_me):
@@ -136,15 +140,19 @@ class PokerEnv(gym.Env):
             round_state = DataEncoder.encode_round_state(game_state)
             player = table.seats.players[next_player]
             valid_actions = self.emulator.generate_possible_actions(game_state)
-            hole_card = DataEncoder.encode_player(self.game_state["table"].seats.players[next_player], holecard=True)["hole_card"]
+            hole_card = DataEncoder.encode_player(
+                self.game_state["table"].seats.players[next_player], holecard=True
+            )["hole_card"]
 
-            action, bet = self.players[next_player].declare_action(valid_actions, hole_card, round_state)
+            action, bet = self.players[next_player].declare_action(
+                valid_actions, hole_card, round_state
+            )
             game_state, _event = self.emulator.apply_action(game_state, action, bet)
 
         self.game_state = game_state
 
     def reset(self, **kwargs):
-        self.num_games+=1
+        self.num_games += 1
 
         dealer = self.num_games % 3
         # seed = (self.num_games//3)%10000
@@ -157,9 +165,10 @@ class PokerEnv(gym.Env):
         self.keep_playing(break_me=True)
 
         round_state = DataEncoder.encode_round_state(self.game_state)
-        hole_card = DataEncoder.encode_player(self.game_state["table"].seats.players[0], holecard=True)["hole_card"]
+        hole_card = DataEncoder.encode_player(
+            self.game_state["table"].seats.players[0], holecard=True
+        )["hole_card"]
         assert len(hole_card) == 2
-
 
         # print(self.cards)
         # extracted_features = extract_features(hole_card, round_state, "me")
@@ -172,10 +181,11 @@ class PokerEnv(gym.Env):
 
         return extracted_features, {}
 
-
     def step(self, action):
         game_state = self.game_state
-        hole_card = DataEncoder.encode_player(self.game_state["table"].seats.players[0], holecard=True)["hole_card"]
+        hole_card = DataEncoder.encode_player(
+            self.game_state["table"].seats.players[0], holecard=True
+        )["hole_card"]
         assert len(hole_card) == 2
 
         # Must be my turn
@@ -185,15 +195,18 @@ class PokerEnv(gym.Env):
         bet_amount = 0
         street = game_state["street"]
 
-
         my_action, bet_amount = int_to_action(action, valid_actions)
-        self.statistics[(street, my_action)] = self.statistics.get((street, my_action), 0) + 1
+        self.statistics[(street, my_action)] = (
+            self.statistics.get((street, my_action), 0) + 1
+        )
 
         # print(my_action, bet_amount)
-        self.game_state, _event = self.emulator.apply_action(game_state, my_action, bet_amount)
+        self.game_state, _event = self.emulator.apply_action(
+            game_state, my_action, bet_amount
+        )
 
         # if street == Const.Street.FLOP or street == Const.Street.PREFLOP or street == Const.Street.TURN or street == Const.Street.RIVER:
-            # self.keep_playing(break_me=True) # We want to only play first turn properly, rest is all calls
+        # self.keep_playing(break_me=True) # We want to only play first turn properly, rest is all calls
         # else:
         self.keep_playing(break_me=True)
 
@@ -202,11 +215,9 @@ class PokerEnv(gym.Env):
         # extracted_features = extract_features_tensor(hole_card, round_state, "me")[np.newaxis, :]
         extracted_features = extract_features_tensor(hole_card, round_state, "me")
 
-
-
         if self.game_state["street"] == Const.Street.FINISHED:
             stack = self.game_state["table"].seats.players[0].stack
-            reward = (stack - STACK) 
+            reward = stack - STACK
             # print("STACK:", stack)
             self.total_reward += reward
             # print(stack - STACK)
@@ -219,7 +230,10 @@ class PokerEnv(gym.Env):
                 print("Cumulative reward:", self.cumulative_reward)
                 print("Total reward:", self.total_reward)
                 print("Average reward:", self.total_reward / RESET_THRESHOLD)
-                print("bb per 100g:", self.total_reward * 100 / (RESET_THRESHOLD * BIG_BLIND_AMOUNT))
+                print(
+                    "bb per 100g:",
+                    self.total_reward * 100 / (RESET_THRESHOLD * BIG_BLIND_AMOUNT),
+                )
                 # print("Statistics:", self.statistics)
                 for i, street in enumerate(["preflop", "flop", "turn", "river"]):
                     for act in ["fold", "call", "raise"]:
@@ -229,11 +243,9 @@ class PokerEnv(gym.Env):
                 self.statistics = {}
 
             # fresh_observation, _ = self.reset()
-            return extracted_features, reward/STACK, True, False, {}
-
+            return extracted_features, reward / STACK, True, False, {}
 
         return extracted_features, 0, False, False, {}
-
 
 
 MODEL_PATH = "models/3p_3s/sb_cnn"
@@ -242,39 +254,36 @@ NUM_ENVIRONMENTS = 8
 policy_kwargs = dict(
     features_extractor_class=PokerCNNExtractor,
     features_extractor_kwargs=dict(features_dim=256),
-    net_arch=[]  # Skip additional layers since the CNN handles feature extraction
+    net_arch=[],  # Skip additional layers since the CNN handles feature extraction
 )
+
 
 def make_env():
     return lambda: PokerEnv(CallPlayer(), CallPlayer())
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     print("MPS available:", torch.backends.mps.is_available())
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Training on: {device}")
 
     env = SubprocVecEnv([make_env() for _ in range(NUM_ENVIRONMENTS)])
     model = PPO(
-        'CnnPolicy',  # Use CNN-compatible policy
-        env, 
+        "CnnPolicy",  # Use CNN-compatible policy
+        env,
         verbose=1,
         ent_coef=0.01,
         vf_coef=0.7,
         n_steps=256,
         # learning_rate=0.003,
         policy_kwargs=policy_kwargs,
-        device=device
+        device=device,
     )
-    
+
     old_model = PPO.load(MODEL_PATH, env=env)
     model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
 
-    while (True):
+    while True:
         model.learn(total_timesteps=100000, reset_num_timesteps=False)
         print("SAVING MODEL")
         model.save(MODEL_PATH)
-
-
-
-
