@@ -36,21 +36,23 @@ class PPOPlayer(BasePlayer):
         )
 
     @staticmethod
-    def from_model_file(model_file: Path | str, uuid: str) -> "PPOPlayer":
+    def from_model_file(model_path: Path | str, uuid: str, **kwargs) -> "PPOPlayer":
         """Load a model from a file.
 
         Parameters:
-            model_file: Path | str
+            model_path: Path | str
                 The path to the model file.
             uuid: str
                 The uuid of this player
+            **kwargs
+                Additional arguments to pass to the constructor.
 
         Returns:
             player: PPOPlayer
                 The loaded player.
         """
-        model: Final[PPO] = PPO.load(model_file)
-        return PPOPlayer(model, uuid)
+        model: Final[PPO] = PPO.load(model_path)
+        return PPOPlayer(model, uuid, **kwargs)
 
     @staticmethod
     def int_to_action(output: int, valid_actions) -> Tuple[str, int]:
