@@ -1,6 +1,6 @@
 """Classes and functions for poker games."""
 
-from typing import Any, Dict, Final, List, Optional, TypedDict
+from typing import Any, Dict, Final, List, Optional, Tuple, TypedDict
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
@@ -28,6 +28,11 @@ class PlayerStats(TypedDict):
     allin: int
     big_blinds: int
     small_blinds: int
+    plays: Dict[Tuple[int, str, str, int], int]
+    dealer_fold: Dict[Tuple[str, str], int]
+    dealer_call: Dict[Tuple[str, str], int]
+    dealer_raise: Dict[Tuple[str, str], int]
+
     # preflop_folds: int
     # preflop_calls: int
     # preflop_raises: int
@@ -59,6 +64,10 @@ def default_player_stats() -> PlayerStats:
         "calls": 0,
         "raises": 0,
         "allin": 0,
+        "plays": {},
+        "dealer_fold": {},
+        "dealer_call": {},
+        "dealer_raise": {},
         # "preflop_folds": 0,
         # "preflop_calls": 0,
         # "preflop_raises": 0,
@@ -72,6 +81,76 @@ def default_player_stats() -> PlayerStats:
         # "river_calls": 0,
         # "river_raises": 0,
     }
+
+
+def read_game(game_state, events) -> Dict[str, PlayerStats]:
+    """Obtain each player's stats for a game.
+
+    Parameters:
+        game_state: Dict[str, Any]
+            The game state.
+        events: List[Dict[str, Any]]
+            The events of the game.
+
+    Returns:
+        player_stats: Dict[str, PlayerStats]
+            Each player's stats.
+    """
+
+    player_stats: Dict[str, PlayerStats] = {}
+    players: Final[List[Player]] = game_state["table"].seats.players
+    for player in players:
+        default = default_player_stats()
+        default["uuid"] = player.uuid
+        default["winnings"] = player.stack - STACK
+        default["num_games"] = 1
+
+        player_stats[player.uuid] = default
+
+    for event in events:
+        if event["type"] == "event_round_finish":
+            # Process action histories to count actions
+            for street, actions in event["round_state"]["action_histories"].items():
+                for action in actions:
+                    uuid = action["uuid"]
+                    # print(uuid, action["action"])
+
+                    # hole_card = tuple(event["round_state"]["seats"][uuid]["hole_card"])
+                    # print(hole_card)
+
+                    assert uuid in player_stats
+                    if action["action"] == "FOLD":
+                        player_stats[uuid]["folds"] += 1
+                    elif action["action"] == "CALL":
+                        player_stats[uuid]["calls"] += 1
+                    elif action["action"] == "RAISE":
+                        player_stats[uuid]["raises"] += 1
+                    elif action["action"] == "BIGBLIND":
+                        player_stats[uuid]["big_blinds"] += 1
+                    elif action["action"] == "SMALLBLIND":
+                        player_stats[uuid]["small_blinds"] += 1
+
+            for p in event["round_state"]["seats"]:
+                p: Dict[str, Any]
+                uuid = p["uuid"]
+                assert uuid in player_stats
+                # all-in
+                if p["state"] == "allin":
+                    player_stats[uuid]["allin"] += 1
+
+    return player_stats
+
+
+def dict_add(
+    d1: Dict[Tuple[str, str], int], d2: Dict[Tuple[str, str], int]
+) -> Dict[Tuple[str, str], int]:
+    """Add two dictionaries of tuples."""
+    for k, v in d2.items():
+        if k in d1:
+            d1[k] += v
+        else:
+            d1[k] = v
+    return d1
 
 
 def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
@@ -101,6 +180,10 @@ def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
         "allin": stats1["allin"] + stats2["allin"],
         "big_blinds": stats1["big_blinds"] + stats2["big_blinds"],
         "small_blinds": stats1["small_blinds"] + stats2["small_blinds"],
+        "plays": stats1["plays"],
+        "dealer_fold": dict_add(stats1["dealer_fold"], stats2["dealer_fold"]),
+        "dealer_call": dict_add(stats1["dealer_call"], stats2["dealer_call"]),
+        "dealer_raise": dict_add(stats1["dealer_raise"], stats2["dealer_raise"]),
         # "preflop_folds": stats1["preflop_folds"] + stats2["preflop_folds"],
         # "preflop_calls": stats1["preflop_calls"] + stats2["preflop_calls"],
         # "preflop_raises": stats1["preflop_raises"] + stats2["preflop_raises"],

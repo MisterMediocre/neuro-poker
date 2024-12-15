@@ -1,14 +1,17 @@
-"""Functions for managing cards.
-"""
+"""Functions for managing cards."""
 
 import random
+import time
 from typing import Final, List, Optional, Tuple
 
 from pypokerengine.engine.card import Card
 from pypokerengine.engine.deck import Deck
 
-# Full stack of cards
-FULL_RANKS: Final[List[str]] = [
+# ALL:     Full deck of cards
+# SHORT:   Short stack of cards, with all 4 suits
+# SHORTER: Short stack of cards, with only 3 suits
+
+ALL_RANKS: Final[List[str]] = [
     "2",
     "3",
     "4",
@@ -23,14 +26,11 @@ FULL_RANKS: Final[List[str]] = [
     "K",
     "A",
 ]
-FULL_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
-
-# Short stack of cards, with all 4 suits
 SHORT_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
-SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
-
-# Short stack of cards, with only 3 suits
 SHORTER_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+
+ALL_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
+SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
 SHORTER_SUITS: Final[List[str]] = ["C", "D", "H"]
 
 
@@ -111,8 +111,10 @@ def get_deck(cards: List[str] = [], seed: Optional[int] = None) -> Deck:
     card_ids: Final[List[int]] = [Card.from_str(s).to_id() for s in cards]
 
     if seed is not None:
-        # print("Seed used: ", seed)
-        random.seed(seed)  # Ignoring the seed as a test
+        random.seed(seed)
+    else:
+        random.seed(time.time())
 
     random.shuffle(card_ids)
+
     return Deck(cheat=True, cheat_card_ids=card_ids)

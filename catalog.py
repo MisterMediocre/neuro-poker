@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Dict, Final, List
 
+from gym_env_opp import load_opposition_player
 from termcolor import colored
 
 from gym_env import load_model_player
@@ -21,9 +22,6 @@ from neuropoker.models.neat.es_hyperneat import ESHyperNEATModel
 from neuropoker.models.neat.hyperneat import HyperNEATModel
 from neuropoker.models.neat.neat import NEATModel
 from neuropoker.players.base import BasePlayer
-from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
-from neuropoker.players.neat import NEATPlayer
-from neuropoker.players.utils import PlayerDefinition
 
 CATALOG: Final[Dict[str, PlayerDefinition]] = {
     # Naive players
@@ -52,6 +50,12 @@ CATALOG: Final[Dict[str, PlayerDefinition]] = {
         ESHyperNEATModel,
         Path("models/3p_3s/3p_3s_es-hyperneat__call__1000g.pkl"),
     ),
+    "op115": load_opposition_player("models/3p_3s/op1", "op115", "call"),
+    "op116": load_opposition_player("models/3p_3s/op1", "op116", "call"),
+    "op110": load_opposition_player("models/3p_3s/op1", "op110", "sb5"),
+    "op111": load_opposition_player("models/3p_3s/op1", "op111", "sb5"),
+    "op11": load_opposition_player("models/3p_3s/op1", "op11", "sb6"),
+    "op12": load_opposition_player("models/3p_3s/op1", "op12", "sb6"),
 }
 
 
@@ -184,6 +188,9 @@ def main():
     # Expect the model to fully exploit the folders
     compete(["model_1", "fold", "fold"], config, num_games=300)
 
+    # Expect the models to tie, while taking advantage of the fold player
+    compete(["model_1", "model_1", "fold"], config, num_games=30)
+
     # Expect the model to fully exploit the call players
     compete(["model_1", "call", "call"], config, num_games=500)
     compete(["sb", "call", "call"], config, num_games=1000)
@@ -202,9 +209,10 @@ def main():
     compete(["sb6", "call", "call"], config, num_games=3000)
     compete(["sb6", "sb5", "sb4"], config, num_games=3000)
     compete(["sb6", "sb3", "sb2"], config, num_games=3000)
-
-    # Expect the models to tie, while taking advantage of the fold player
-    compete(["model_1", "model_1", "fold"], config, num_games=30)
+    compete(["sb6", "op11", "op12"], config, num_games=3000)
+    compete(["sb5", "op110", "op111"], config, num_games=3000)
+    compete(["call", "op115", "op116"], config, num_games=3000)
+    compete(["call", "call", "call"], config, num_games=100)
 
 
 if __name__ == "__main__":

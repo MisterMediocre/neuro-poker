@@ -1,27 +1,42 @@
 """Base class for poker players."""
 
-from abc import ABC, abstractmethod
-from typing import Final, Tuple, TypeVar
+from typing import Final, TypeVar
 
 from pypokerengine.players import BasePokerPlayer
 
 PlayerT = TypeVar("PlayerT", bound="BasePlayer")
 
 
-class BasePlayer(ABC, BasePokerPlayer):
+class BasePlayer(BasePokerPlayer):
     """Base class for poker players."""
 
-    def __init__(self, uuid: str) -> None:
+    def __init__(self, uuid: str | None = None):
         """Initialize the player.
 
         Parameters:
-            uuid: str
+            uuid: str | None
                 The uuid of this player.
         """
-        self.uuid: Final[str] = uuid
+        self.dealer_action = {}
+        self.uuid: Final[str | None] = uuid
+        super(BasePlayer, self).__init__()
 
-    @abstractmethod
-    def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
+    def report_action(self, action, hole_card, round_state):
+        next_player = round_state["next_player"]
+        dealer = round_state["dealer_btn"]
+        street = round_state["street"]
+
+        if next_player != dealer or street != "preflop":
+            return
+
+        h1 = min(hole_card[0], hole_card[1])
+        h2 = max(hole_card[0], hole_card[1])
+        rep = (h1, h2)
+
+        self.dealer_action[rep] = self.dealer_action.get(rep, {})
+        self.dealer_action[rep][action[0]] = self.dealer_action[rep].get(action, 0) + 1
+
+    def declare_action(self, valid_actions, hole_card, round_state):
         """Select an action.
 
         Parameters:

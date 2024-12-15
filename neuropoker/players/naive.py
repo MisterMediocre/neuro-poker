@@ -33,9 +33,12 @@ class RandomPlayer(BasePlayer):
         if action["action"] == "raise":
             # Some multiples of min
             multiple = random.choice([1, 2, 3])
-            return action["action"], multiple * action["amount"]["min"]
+            res = (action["action"], multiple * action["amount"]["min"])
+        else:
+            res = action["action"], action["amount"]
 
-        return action["action"], action["amount"]
+        self.report_action(res, hole_card, round_state)
+        return res
 
 
 class CallPlayer(BasePlayer):
@@ -59,7 +62,9 @@ class CallPlayer(BasePlayer):
                 The amount to bet or raise.
         """
         action = valid_actions[1]
-        return action["action"], action["amount"]
+        res = (action["action"], action["amount"])
+        self.report_action(res, hole_card, round_state)
+        return res
 
 
 class FoldPlayer(RandomPlayer):
@@ -83,5 +88,6 @@ class FoldPlayer(RandomPlayer):
                 The amount to bet or raise.
         """
         action = valid_actions[0]
-        # print(action['action'])
-        return action["action"], action["amount"]
+        res = (action["action"], action["amount"])
+        self.report_action(res, hole_card, round_state)
+        return res

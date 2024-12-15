@@ -151,6 +151,22 @@ def extract_features_tensor(
 
     return tensor
 
+def extract_features_opp(hole_card: List[str], round_state: Dict[str, Any], player_uuid: str, opp_uuid: str) -> np.ndarray:
+    player_features = extract_features(hole_card, round_state, player_uuid)
+
+    dealer_index: Final[int] = round_state["dealer_btn"]
+    rotated_seats: Final[List[Dict[str, Any]]] = (
+        round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
+    )
+    player_positions: Final[Dict[str, int]] = {
+        p["uuid"]: i for i, p in enumerate(rotated_seats)
+    }
+    normalized_position: Final[float] = player_positions[opp_uuid] / (
+        NUM_PLAYERS - 1
+    )
+
+    return np.append(player_features, normalized_position)
+
 
 def extract_features(
     hole_card: List[str], round_state: Dict[str, Any], player_uuid: str
