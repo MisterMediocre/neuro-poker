@@ -76,6 +76,7 @@ def get_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "-n",
         "--num-epochs",
         type=int,
         default=DEFAULT_NUM_EPOCHS,
