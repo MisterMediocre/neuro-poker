@@ -1,108 +1,29 @@
 #!/usr/bin/env python3
 
-"""Train a PPO agent, using a CNN, to play poker."""
+"""Train a PPO agent with a CNN to play poker."""
 
+import argparse
 from pathlib import Path
-from typing import Any, Callable, Dict, Final, List, override
+from typing import Any, Dict, Final, List
 
-import torch
-from gymnasium import spaces
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import SubprocVecEnv
+import gymnasium
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 from stable_baselines3.ppo.ppo import PPO
 from termcolor import colored
 
+from neuropoker.extra.torch import get_device
 from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
-from neuropoker.game.game import Game, default_player_stats, merge
-from neuropoker.game.gym import PokerEnv
+from neuropoker.game.game import Game, PlayerStats, default_player_stats, merge
+from neuropoker.game.gym import PokerCNNExtractor, make_env
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import CallPlayer
 from neuropoker.players.ppo import PPOPlayer
+from neuropoker.players.utils import load_ppo_player
 
 DEFAULT_MODEL_FILE: Final[Path] = Path("models/3p_3s/sb_cnn")
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
-DEFAULT_NUM_CORES: Final[int] = 8
+DEFAULT_NUM_ENVIRONMENTS: Final[int] = 8
 DEFAULT_NUM_TIMESTEPS: Final[int] = 100000
-
-
-def load_model_player(model_path: str | Path, uuid: str) -> BasePlayer:
-    """Load a ModelPlayer from a file.
-
-    Parameters:
-        model_path: str | Path
-            The path to the model file.
-        uuid: str
-            The UUID of the player.
-
-    Returns:
-        player: BasePlayer
-            The loaded player.
-    """
-    if not Path(model_path).exists() or model_path == "call":
-        return CallPlayer(uuid)
-
-    model = PPO.load(model_path)
-    return PPOPlayer(model, uuid)
-
-
-class PokerCNNExtractor(BaseFeaturesExtractor):
-    def __init__(
-        self, observation_space: spaces.Space, features_dim: int = 256
-    ) -> None:
-        """Initialize the PokerCNNExtractor.
-
-        Parameters:
-            observation_space: gym.spaces.Space
-                The observation space.
-            features_dim: int
-                The size of the feature vector.
-        """
-        super().__init__(observation_space, features_dim)
-
-        if observation_space.shape is None:
-            raise ValueError("The observation space shape should not be None")
-
-        # Observation space dimensions (channels, height, width)
-        n_input_channels = observation_space.shape[0]
-
-        # Define the CNN layers
-        self.cnn = torch.nn.Sequential(
-            # Conv Layer 1
-            torch.nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
-            torch.nn.ReLU(),
-            # Conv Layer 2
-            torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            torch.nn.ReLU(),
-            # Flatten to 1D vector
-            torch.nn.Flatten(),
-        )
-
-        # Compute the size of the output after CNN layers
-        with torch.no_grad():
-            sample_input = torch.zeros((1,) + observation_space.shape)
-            n_flatten = self.cnn(sample_input).shape[1]
-
-        # Fully connected layer to produce feature vector
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(n_flatten, features_dim),
-            torch.nn.ReLU(),
-        )
-
-    @override
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        """Make a forward pass through the network.
-
-        Parameters:
-            observations: torch.Tensor
-                The input tensor.
-
-        Returns:
-            output: torch.Tensor
-                The output tensor.
-        """
-        x: torch.Tensor = self.cnn(observations)
-        return self.fc(x)
-
 
 POLICY_KWARGS: Final[Dict[str, Any]] = {
     "features_extractor_class": PokerCNNExtractor,
@@ -111,46 +32,85 @@ POLICY_KWARGS: Final[Dict[str, Any]] = {
 }
 
 
-def make_env() -> Callable[[], PokerEnv]:
-    """Create a poker environment.
+def get_args() -> argparse.Namespace:
+    """Get command line arguments."""
+    parser = argparse.ArgumentParser(description="Train a PPO agent to play poker.")
 
-    Returns:
-        env: () -> PokerEnv
-            A function that creates a poker environment.
-    """
-    return lambda: PokerEnv(
-        Game(
-            [
-                load_model_player(DEFAULT_MODEL_FILE, "me"),
-                load_model_player(DEFAULT_MODEL_FILE, "opponent1"),
-                load_model_player(DEFAULT_MODEL_FILE, "opponent2"),
-            ],
-            get_card_list(SHORTER_SUITS, SHORT_RANKS),
-        )
+    parser.add_argument(
+        "-m",
+        "--model-file",
+        type=Path,
+        default=DEFAULT_MODEL_FILE,
+        help=(
+            "The path to the model file to train. This model will "
+            "be trained during training and updated. "
+            f"(default: {DEFAULT_MODEL_FILE})"
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--opponent-model-file",
+        type=Path,
+        default=DEFAULT_MODEL_FILE,
+        help=(
+            "The path to the opponent model file to train and play "
+            "against. This model will be held static during training "
+            f"and evaluation. (default: {DEFAULT_MODEL_FILE})"
+        ),
+    )
+    parser.add_argument(
+        "-e",
+        "--num-environments",
+        type=int,
+        default=DEFAULT_NUM_ENVIRONMENTS,
+        help=(
+            "The number of environments to run in parallel. "
+            f"(default: {DEFAULT_NUM_ENVIRONMENTS})"
+        ),
+    )
+    parser.add_argument(
+        "-t",
+        "--num-timesteps",
+        type=int,
+        default=DEFAULT_NUM_TIMESTEPS,
+        help=(
+            "The number of timesteps to train the model for between "
+            f"evaluations. (default: {DEFAULT_NUM_TIMESTEPS})"
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--device",
+        type=str,
+        default="auto",
+        help="The device to train on (cpu, cuda, mps). (default: auto)",
     )
 
+    return parser.parse_args()
 
-def get_device() -> str:
-    """Get the device to train on.
 
-    Returns:
+def load_trainee_player(
+    env: gymnasium.Env | VecEnv,
+    model_path: str | Path | None = None,
+    device: str = "auto",
+) -> PPOPlayer:
+    """Load the model to be trained.
+
+    Parameters:
+        env: gymnasium.Env | VecEnv
+            The environment to train in.
+        layers: List[int]
+            The number of nodes in each layer of the neural network.
+        model_path: str | Path | None
+            The path to the model file, if not training from scratch.
         device: str
             The device to train on.
+
+    Returns:
+        player: BasePlayer
+            The player to be trained
     """
-    if torch.cuda.is_available():
-        return "cuda"
-    elif torch.backends.mps.is_available():
-        return "mps"
-    else:
-        return "cpu"
 
-
-def main() -> None:
-    """Run the script."""
-
-    device: Final[str] = get_device()
-
-    env = SubprocVecEnv([make_env() for _ in range(DEFAULT_NUM_CORES)])
     model = PPO(
         "CnnPolicy",  # Use CNN-compatible policy
         env,
@@ -163,62 +123,158 @@ def main() -> None:
         device=device,
     )
 
+    # If we are loading from an existing model file, load the old model
+    # and copy the policy weights to the new model
+    if model_path is not None and Path(model_path).with_suffix(".zip").exists():
+        print(
+            colored("[load_trainee_player]", color="blue")
+            + f" Starting training from old model at {model_path}"
+        )
+
+        old_model: Final[PPO] = PPO.load(model_path, env=env)
+        model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
+    else:
+        print(
+            colored("[load_trainee_player]", color="blue")
+            + " Starting training from scratch"
+        )
+
+    return PPOPlayer(model, "me")
+
+
+def load_opponent_players(
+    model_file: str | Path | None = None, num_opponents: int = 2
+) -> List[PPOPlayer | CallPlayer]:
+    """Load opponents.
+
+    Parameters:
+        model_file: str | Path | None
+            The path to the model file, if not comparing against a Call baseline.
+        num_opponents: int
+            The number of opponents to load.
+
+    Returns:
+        opponent_players: List[POPlayer | CallPlayer]
+            The list of opponents.
+    """
+    opponent_players: List[PPOPlayer | CallPlayer] = []
+
+    for i in range(num_opponents):
+        opponent_player: PPOPlayer | CallPlayer = load_ppo_player(
+            model_file, f"opponent{i}"
+        )
+        opponent_players.append(opponent_player)
+
+    return opponent_players
+
+
+def main() -> None:
+    """Run the script."""
+    args: Final[argparse.Namespace] = get_args()
+
+    model_path: Final[Path] = args.model_file
+    opponent_path: Final[Path] = args.opponent_model_file
+    num_environments: Final[int] = args.num_environments
+    num_timesteps: Final[int] = args.num_timesteps
+    device: Final[str] = get_device() if args.device == "auto" else args.device
+
     print(
         colored("------------ gym_env_cnn -------------", color="blue", attrs=["bold"])
     )
-    print(colored(f'{"Model file":<12}: ', color="blue") + f"{DEFAULT_MODEL_FILE}")
-    print(colored(f'{"Device":<12}: ', color="blue") + f"{device}")
+    print(colored(f'{"Model file":<16}: ', color="blue") + f"{model_path}")
+    print(colored(f'{"Opponent file":<16}: ', color="blue") + f"{opponent_path}")
+    print(colored(f'{"Environments":<16}: ', color="blue") + f"{num_environments}")
+    print(colored(f'{"Timesteps":<16}: ', color="blue") + f"{num_timesteps}")
+    print(colored(f'{"Device":<16}: ', color="blue") + f"{device}")
+    print()
+
+    env = SubprocVecEnv(
+        [
+            make_env(
+                model_path=model_path,
+                reset_threshold=30000,
+                suits=SHORTER_SUITS,
+                ranks=SHORT_RANKS,
+            )
+            for _ in range(num_environments)
+        ]
+    )
 
     #
-    # Load the model
+    # Load the trainee player
     #
-    model_zip_file: Final[Path] = DEFAULT_MODEL_FILE.with_suffix(".zip")
-    if model_zip_file.exists():
-        print(colored(f"Loading old model from {model_zip_file}...", "green"))
-
-        # Load the old model and copy the policy weights to the new model
-        old_model = PPO.load(DEFAULT_MODEL_FILE, env=env)
-        model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
-
-        # Statically load opponents as the original model
-        p2: BasePlayer = load_model_player(DEFAULT_MODEL_FILE, "opponent1")
-        p3: BasePlayer = load_model_player(DEFAULT_MODEL_FILE, "opponent2")
-    else:
-        print(colored("Training new model from scratch...", "green"))
-
-        # Statically load opponents as the original model
-        p2: BasePlayer = CallPlayer("opponent1")
-        p3: BasePlayer = CallPlayer("opponent2")
+    trainee_player: Final[PPOPlayer] = load_trainee_player(
+        env, model_path=model_path, device=device
+    )
+    print(trainee_player)
 
     #
-    # Train the model
+    # Load the opponent players
     #
+    opponent_players: Final[List[PPOPlayer | CallPlayer]] = load_opponent_players(
+        opponent_path, 2
+    )
+    print(opponent_players)
+
+    #
+    # Train the trainee player
+    #
+    num_epochs: int = 0
     while True:
-        model.learn(total_timesteps=100000, reset_num_timesteps=False)
-        print("SAVING MODEL")
-        model.save(DEFAULT_MODEL_FILE)
+        num_epochs += 1
 
-        print("Evaluating model")
+        #
+        # Train the model
+        #
+        trainee_player.model.learn(
+            total_timesteps=num_timesteps, reset_num_timesteps=False
+        )
 
-        p1 = load_model_player(DEFAULT_MODEL_FILE, "me")
-        players: List[BasePlayer] = [p1, p2, p3]
+        #
+        # Save the model
+        #
+        print(
+            colored(f"[epoch {num_epochs:>4}]", color="blue")
+            + f" Saving model to {model_path}..."
+        )
+        trainee_player.model.save(model_path)
 
-        overall_performance = default_player_stats()
+        #
+        # Evaluate the model
+        #
+        print(colored(f"[epoch {num_epochs:>4}]", "blue") + " Evaluating model...")
+        p1: PPOPlayer | CallPlayer = load_ppo_player(model_path, "me")
+        if not isinstance(p1, PPOPlayer):
+            raise ValueError("Player 1 is not a PPOPlayer")
+
+        players: List[BasePlayer] = [p1, *opponent_players]
+        overall_performance: PlayerStats = default_player_stats()
         overall_performance["uuid"] = "me"
 
+        # Try each position
         for i in range(0, 3):
             players_: List[BasePlayer] = players[i:] + players[:i]
 
             game = Game(players_, get_card_list(SHORTER_SUITS, SHORT_RANKS))
-            performances = game.play_multiple(num_games=2000, seed=-1)
+            performances: Dict[str, PlayerStats] = game.play_multiple(
+                num_games=2000, seed=-1
+            )
             overall_performance = merge(overall_performance, performances["me"])
 
-        print("Overall performance:")
-        print(
-            "Average winning:",
-            overall_performance["winnings"] / overall_performance["num_games"],
+        #
+        # Print evaluation results
+        #
+        average_winnings: float = (
+            overall_performance["winnings"] / overall_performance["num_games"]
         )
-        print(overall_performance)
+        print(
+            colored(f"[epoch {num_epochs:>4}]", color="blue")
+            + f" Average winnings: {average_winnings}"
+        )
+        print(
+            colored(f"[epoch {num_epochs:>4}]", color="blue")
+            + f" Overall performance: {overall_performance}"
+        )
 
 
 if __name__ == "__main__":

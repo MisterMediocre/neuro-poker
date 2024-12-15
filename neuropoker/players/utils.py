@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Final, Type
 
+from stable_baselines3.ppo.ppo import PPO
+from termcolor import colored
+
 from neuropoker.models.base import BaseModel
 from neuropoker.models.neat.neat import NEATModel
 from neuropoker.models.utils import load_model
@@ -93,3 +96,41 @@ def player_type_from_string(player_type_str: str) -> Type[BasePlayer]:
         return PLAYER_TYPES[player_type_str]
 
     raise ValueError(f"Player type {player_type_str} not recognized")
+
+
+def load_ppo_player(
+    model_path: str | Path | None, uuid: str, verbose: bool = False
+) -> PPOPlayer | CallPlayer:
+    """Attempt to load a PPO player player from a PPO model file.
+
+    Parameters:
+        model_path: str | Path | None
+            The path to the model file.
+        uuid: str
+            The UUID of the player.
+        verbose: bool
+            Whether to print verbose messages.
+
+    Returns:
+        player: PPOPlayer | CallPlayer
+            The loaded player.
+
+    By default, it tries to load a PPOPlayer from the path proivded
+    by <model_path>. If <model_path> is not provided or does not exist,
+    it returns a CallPlayer.
+    """
+    if model_path is not None and Path(model_path).with_suffix(".zip").exists():
+        if verbose:
+            print(
+                colored("[load_model_player]", color="blue")
+                + f" Model path {model_path} found, returning PPOPlayer"
+            )
+        model = PPO.load(model_path)
+        return PPOPlayer(model, uuid)
+
+    if verbose:
+        print(
+            colored("[load_model_player]", color="blue")
+            + f" Model path {model_path} not found, returning CallPlayer"
+        )
+    return CallPlayer(uuid)

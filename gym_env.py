@@ -4,20 +4,21 @@
 
 import argparse
 from pathlib import Path
-from typing import Callable, Final, List
+from typing import Dict, Final, List
 
 import gymnasium
-import torch
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecEnv
 from stable_baselines3.ppo.ppo import PPO
 from termcolor import colored
 
+from neuropoker.extra.torch import get_device
 from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
 from neuropoker.game.game import Game, PlayerStats, default_player_stats, merge
-from neuropoker.game.gym import PokerEnv
+from neuropoker.game.gym import make_env
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import CallPlayer
 from neuropoker.players.ppo import PPOPlayer
+from neuropoker.players.utils import load_ppo_player
 
 DEFAULT_MODEL_FILE: Final[Path] = Path("models/3p_3s/sb6")
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
@@ -95,78 +96,6 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_model_player(
-    model_path: str | Path | None, uuid: str, verbose: bool = False
-) -> PPOPlayer | CallPlayer:
-    """Load a player from a file.
-
-    Parameters:
-        model_path: str | Path | None
-            The path to the model file.
-        uuid: str
-            The UUID of the player.
-        verbose: bool
-            Whether to print verbose messages.
-
-    Returns:
-        player: PPOPlayer | CallPlayer
-            The loaded player.
-
-    By default, it tries to load a PPOPlayer from the path proivded
-    by <model_path>. If <model_path> is not provided or does not exist,
-    it returns a CallPlayer.
-    """
-    if model_path is not None and Path(model_path).with_suffix(".zip").exists():
-        if verbose:
-            print(
-                colored("[load_model_player]", color="blue")
-                + f" Model path {model_path} found, returning PPOPlayer"
-            )
-        model = PPO.load(model_path)
-        return PPOPlayer(model, uuid)
-
-    if verbose:
-        print(
-            colored("[load_model_player]", color="blue")
-            + f" Model path {model_path} not found, returning CallPlayer"
-        )
-    return CallPlayer(uuid)
-
-
-def make_env() -> Callable[[], PokerEnv]:
-    """Create a poker environment.
-
-    Returns:
-        env: () -> PokerEnv
-            A function that creates a poker environment.
-    """
-    return lambda: PokerEnv(
-        Game(
-            [
-                load_model_player(DEFAULT_MODEL_FILE, "me"),
-                load_model_player(DEFAULT_MODEL_FILE, "opponent1"),
-                load_model_player(DEFAULT_MODEL_FILE, "opponent2"),
-            ],
-            get_card_list(SHORTER_SUITS, SHORT_RANKS),
-        )
-    )
-
-
-def get_device() -> str:
-    """Get the device to train on.
-
-    Returns:
-        device: str
-            The device to train on.
-    """
-    if torch.cuda.is_available():
-        return "cuda"
-    elif torch.backends.mps.is_available():
-        return "mps"
-    else:
-        return "cpu"
-
-
 def load_trainee_player(
     env: gymnasium.Env | VecEnv,
     layers: List[int],
@@ -239,7 +168,7 @@ def load_opponent_players(
     opponent_players: List[PPOPlayer | CallPlayer] = []
 
     for i in range(num_opponents):
-        opponent_player: PPOPlayer | CallPlayer = load_model_player(
+        opponent_player: PPOPlayer | CallPlayer = load_ppo_player(
             model_file, f"opponent{i}"
         )
         opponent_players.append(opponent_player)
@@ -249,10 +178,7 @@ def load_opponent_players(
 
 def main() -> None:
     """Run the script."""
-    # print("MPS available:", torch.backends.mps.is_available())
-    # device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
-    args = get_args()
+    args: Final[argparse.Namespace] = get_args()
 
     model_path: Final[Path] = args.model_file
     opponent_path: Final[Path] = args.opponent_model_file
@@ -272,43 +198,36 @@ def main() -> None:
     print(colored(f'{"Device":<16}: ', color="blue") + f"{device}")
     print()
 
-    env = SubprocVecEnv([make_env() for _ in range(num_environments)])
-    # model = PPO(
-    #     "MlpPolicy",
-    #     env,
-    #     verbose=1,
-    #     ent_coef=0.01,
-    #     vf_coef=0.7,
-    #     n_steps=512,
-    #     learning_rate=0.0001,
-    #     policy_kwargs={"net_arch": layers},
-    #     device=torch.device(device),
-    # )
+    env = SubprocVecEnv(
+        [
+            make_env(
+                model_path=model_path,
+                reset_threshold=30000,
+                suits=SHORTER_SUITS,
+                ranks=SHORT_RANKS,
+            )
+            for _ in range(num_environments)
+        ]
+    )
 
-    # #
-    # # Load the model
-    # #
-    # model_zip_path: Final[Path] = model_path.with_suffix(".zip")
-    # if model_zip_path.exists():
-    #     print(colored(f"Loading old model from {model_zip_path}...", "green"))
-
-    #     # Load the old model and copy the policy weights to the new model
-    #     old_model = PPO.load(model_zip_path, env=env)
-    #     model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
-
-    # Load the opponents
+    #
+    # Load the trainee player
+    #
     trainee_player: Final[PPOPlayer] = load_trainee_player(
         env, layers, model_path=model_path, device=device
     )
     print(trainee_player)
 
+    #
+    # Load the opponent players
+    #
     opponent_players: Final[List[PPOPlayer | CallPlayer]] = load_opponent_players(
         opponent_path, 2
     )
     print(opponent_players)
 
     #
-    # Train the model
+    # Train the trainee player
     #
     num_epochs: int = 0
     while True:
@@ -334,7 +253,7 @@ def main() -> None:
         # Evaluate the model
         #
         print(colored(f"[epoch {num_epochs:>4}]", "blue") + " Evaluating model...")
-        p1: BasePlayer = load_model_player(model_path, "me")
+        p1: PPOPlayer | CallPlayer = load_ppo_player(model_path, "me")
         if not isinstance(p1, PPOPlayer):
             raise ValueError("Player 1 is not a PPOPlayer")
 
@@ -347,9 +266,9 @@ def main() -> None:
             players_: List[BasePlayer] = players[i:] + players[:i]
 
             game = Game(players_, get_card_list(SHORTER_SUITS, SHORT_RANKS))
-            performances = game.play_multiple(num_games=2000, seed=-1)
-
-            # print(performances)
+            performances: Dict[str, PlayerStats] = game.play_multiple(
+                num_games=2000, seed=-1
+            )
             overall_performance = merge(overall_performance, performances["me"])
 
         #

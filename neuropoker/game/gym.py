@@ -2,26 +2,33 @@
 
 import random
 import time
-from typing import Any, Dict, Final, List, Tuple, override
+from pathlib import Path
+from typing import Any, Callable, Dict, Final, List, Tuple, override
 
 import gymnasium
 import numpy as np
+import torch
 from gymnasium import spaces
 from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.engine.poker_constants import PokerConstants as Const
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
+from neuropoker.game.cards import get_card_list
 from neuropoker.game.game import Game, GameState
-from neuropoker.game.utils import STACK, extract_features
+from neuropoker.game.utils import SHORT_RANKS, SHORTER_SUITS, STACK, extract_features
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.ppo import PPOPlayer
+from neuropoker.players.utils import load_ppo_player
 
-RESET_THRESHOLD: Final[int] = 30000
+DEFAULT_RESET_THRESHOLD: Final[int] = 30000
 
 
 class PokerEnv(gymnasium.Env):
     """Class for modeling a poker game in a Gym environment."""
 
-    def __init__(self, game: Game) -> None:
+    def __init__(
+        self, game: Game, reset_threshold: int = DEFAULT_RESET_THRESHOLD
+    ) -> None:
         """Initialize the poker gym environment.
 
         Parameters:
@@ -38,6 +45,7 @@ class PokerEnv(gymnasium.Env):
 
         # Game
         self.game: Game = game
+        self.reset_threshold: Final[int] = reset_threshold
 
         random.seed(time.time())
         self.seed: Final[int] = random.randint(0, 10000)
@@ -199,7 +207,7 @@ class PokerEnv(gymnasium.Env):
             self.total_reward += reward
             self.cumulative_reward += reward
 
-            if self.num_games % RESET_THRESHOLD == 0:
+            if self.num_games % self.reset_threshold == 0:
                 # print("opponent", self.opponent_path)
                 # print("opponent2:", self.opponent2_path)
                 # print("Total games:", self.num_games)
@@ -234,3 +242,102 @@ class PokerEnv(gymnasium.Env):
                 The rendering mode.
         """
         raise NotImplementedError("'render' is not implemented for PokerEnv.")
+
+
+class PokerCNNExtractor(BaseFeaturesExtractor):
+    """CNN-based feature extractor for poker environments."""
+
+    def __init__(
+        self, observation_space: gymnasium.spaces.Space, features_dim: int = 256
+    ) -> None:
+        """Initialize the PokerCNNExtractor.
+
+        Parameters:
+            observation_space: gym.spaces.Space
+                The observation space.
+            features_dim: int
+                The size of the feature vector.
+        """
+        super().__init__(observation_space, features_dim)
+
+        if observation_space.shape is None:
+            raise ValueError("The observation space shape should not be None")
+
+        # Observation space dimensions (channels, height, width)
+        n_input_channels = observation_space.shape[0]
+
+        # Define the CNN layers
+        self.cnn = torch.nn.Sequential(
+            # Conv Layer 1
+            torch.nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(),
+            # Conv Layer 2
+            torch.nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            torch.nn.ReLU(),
+            # Flatten to 1D vector
+            torch.nn.Flatten(),
+        )
+
+        # Compute the size of the output after CNN layers
+        with torch.no_grad():
+            sample_input = torch.zeros((1,) + observation_space.shape)
+            n_flatten = self.cnn(sample_input).shape[1]
+
+        # Fully connected layer to produce feature vector
+        self.fc = torch.nn.Sequential(
+            torch.nn.Linear(n_flatten, features_dim),
+            torch.nn.ReLU(),
+        )
+
+    @override
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        """Make a forward pass through the network.
+
+        Parameters:
+            observations: torch.Tensor
+                The input tensor.
+
+        Returns:
+            output: torch.Tensor
+                The output tensor.
+        """
+        x: torch.Tensor = self.cnn(observations)
+        return self.fc(x)
+
+
+def make_env(
+    model_path: str | Path | None = None,
+    reset_threshold: int = DEFAULT_RESET_THRESHOLD,
+    suits: List[str] | None = None,
+    ranks: List[str] | None = None,
+) -> Callable[[], PokerEnv]:
+    """Create a poker environment.
+
+    Parameters:
+        model_file: str | Path | None
+            The path to the model file to use.
+        reset_threshold: int
+            The number of games after which to reset the environment.
+        suits: List[str] | None
+            The suits to use in the game.
+        ranks: List[str] | None
+            The ranks to use in the game.
+
+    Returns:
+        env: () -> PokerEnv
+            A function that creates a poker environment.
+    """
+    suits_: Final[List[str]] = suits or SHORTER_SUITS
+    ranks_: Final[List[str]] = ranks or SHORT_RANKS
+
+    return lambda: PokerEnv(
+        Game(
+            [
+                load_ppo_player(model_path, "me"),
+                load_ppo_player(model_path, "opponent1"),
+                load_ppo_player(model_path, "opponent2"),
+            ],
+            get_card_list(suits_, ranks_),
+        ),
+        reset_threshold=reset_threshold,
+    )
