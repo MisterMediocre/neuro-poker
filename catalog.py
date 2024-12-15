@@ -2,133 +2,12 @@
 
 """Run a catalog of poker games with different players."""
 
-import random
-import time
-from pathlib import Path
-from typing import Dict, Final, List
+from typing import Final
 
-from gym_env_opp import load_opposition_player
 from termcolor import colored
 
-from gym_env import load_model_player
+from neuropoker.extra.catalog import compete
 from neuropoker.extra.config import Config
-from neuropoker.game.game import (
-    Game,
-    PlayerStats,
-    default_player_stats,
-    merge,
-)
-from neuropoker.models.neat.es_hyperneat import ESHyperNEATModel
-from neuropoker.models.neat.hyperneat import HyperNEATModel
-from neuropoker.models.neat.neat import NEATModel
-from neuropoker.players.base import BasePlayer
-
-CATALOG: Final[Dict[str, PlayerDefinition]] = {
-    # Naive players
-    "random": PlayerDefinition(RandomPlayer),
-    "fold": PlayerDefinition(FoldPlayer),
-    "call": PlayerDefinition(CallPlayer),
-    # SB players
-    "sb": load_model_player("models/3p_3s/sb", "sb"),
-    "sb2": load_model_player("models/3p_3s/sb2", "sb2"),
-    "sb3": load_model_player("models/3p_3s/sb3", "sb3"),
-    "sb4": load_model_player("models/3p_3s/sb4", "sb4"),
-    "sb5": load_model_player("models/3p_3s/sb5", "sb5"),
-    "sb6": load_model_player("models/3p_3s/sb6", "sb6"),
-    "sb_backup": load_model_player("models/3p_3s/sb_backup", "sb_backup"),
-    # Neuroevolution players trained against Call player
-    "3p_3s_neat": PlayerDefinition(
-        NEATPlayer, NEATModel, Path("models/3p_3s/3p_3s_neat__call__1000g.pkl")
-    ),
-    "3p_3s_hyperneat": PlayerDefinition(
-        NEATPlayer,
-        HyperNEATModel,
-        Path("models/3p_3s/3p_3s_hyperneat__call__1000g.pkl"),
-    ),
-    "3p_3s_es-hyperneat": PlayerDefinition(
-        NEATPlayer,
-        ESHyperNEATModel,
-        Path("models/3p_3s/3p_3s_es-hyperneat__call__1000g.pkl"),
-    ),
-    "op115": load_opposition_player("models/3p_3s/op1", "op115", "call"),
-    "op116": load_opposition_player("models/3p_3s/op1", "op116", "call"),
-    "op110": load_opposition_player("models/3p_3s/op1", "op110", "sb5"),
-    "op111": load_opposition_player("models/3p_3s/op1", "op111", "sb5"),
-    "op11": load_opposition_player("models/3p_3s/op1", "op11", "sb6"),
-    "op12": load_opposition_player("models/3p_3s/op1", "op12", "sb6"),
-}
-
-
-def compete(
-    player_names: List[str],
-    config: Config,
-    num_games: int = 100,
-) -> None:
-    """Run a multi-player poker game.
-
-    Parameters:
-        player_names: List[str]
-            The name of each player, taken from the catalog.
-        config: Config
-            The game configuration.
-        num_games: int
-            The number of games to play.
-    """
-
-    if len(player_names) != config["game"]["players"]:
-        raise ValueError(
-            "The number of players in the game configuration "
-            f"({config['game']['players']})"
-            "does not match the number of players provided "
-            f"({len(player_names)})"
-        )
-
-    player_names_: Final[List[str]] = [
-        f"{player_name}-{i}" for i, player_name in enumerate(player_names)
-    ]
-
-    print(f"In the competition, the players are: {player_names_}")
-    print(f"They play {num_games} games from each position.")
-    print()
-
-    players: Final[List[BasePlayer]] = [
-        CATALOG[name_orig].load(name)
-        for name_orig, name in zip(player_names, player_names_)
-    ]
-
-    performances: Dict[str, PlayerStats]
-    performances = {}
-    for player_name in player_names_:
-        default = default_player_stats()
-        default["uuid"] = player_name
-        performances[player_name] = default
-
-    random.seed(time.time())
-    seed = random.randint(0, 1000)
-
-    for i in range(0, len(players)):
-        # Shift the players
-        players_: List[BasePlayer] = players[i:] + players[:i]
-
-        # Run the game
-        game: Game = Game.from_config(players_, config)
-        game_stats: Dict[str, PlayerStats] = game.play_multiple(
-            num_games=num_games, seed=seed
-        )
-
-        for player_name, stats in game_stats.items():
-            performances[player_name] = merge(performances[player_name], stats)
-
-    for player_name, stats in performances.items():
-        print(stats)
-    print()
-
-    for player_name, stats in performances.items():
-        print(
-            f"{player_name:20} avg winnings: {stats["winnings"] / stats["num_games"]:>10.4f}"
-        )
-    print()
-    print()
 
 
 def main():
@@ -193,25 +72,25 @@ def main():
 
     # Expect the model to fully exploit the call players
     compete(["model_1", "call", "call"], config, num_games=500)
-    compete(["sb", "call", "call"], config, num_games=1000)
+    # compete(["sb", "call", "call"], config, num_games=1000)
     compete(["sb_backup", "call", "call"], config, num_games=1000)
-    compete(["sb2", "call", "call"], config, num_games=3000)
-    compete(["sb3", "call", "call"], config, num_games=3000)
-    compete(["sb3", "sb2", "call"], config, num_games=3000)
-    compete(["sb2", "sb3", "call"], config, num_games=3000)
-    compete(["sb4", "call", "call"], config, num_games=3000)
-    compete(["sb4", "sb3", "sb2"], config, num_games=3000)
-    compete(["sb4", "sb3", "sb2"], config, num_games=3000)
-    compete(["sb5", "call", "call"], config, num_games=3000)
-    compete(["sb5", "sb4", "sb3"], config, num_games=3000)
-    compete(["sb5", "sb3", "sb2"], config, num_games=3000)
-    compete(["sb5", "sb2", "call"], config, num_games=3000)
-    compete(["sb6", "call", "call"], config, num_games=3000)
-    compete(["sb6", "sb5", "sb4"], config, num_games=3000)
-    compete(["sb6", "sb3", "sb2"], config, num_games=3000)
-    compete(["sb6", "op11", "op12"], config, num_games=3000)
-    compete(["sb5", "op110", "op111"], config, num_games=3000)
-    compete(["call", "op115", "op116"], config, num_games=3000)
+    # compete(["sb2", "call", "call"], config, num_games=3000)
+    # compete(["sb3", "call", "call"], config, num_games=3000)
+    # compete(["sb3", "sb2", "call"], config, num_games=3000)
+    # compete(["sb2", "sb3", "call"], config, num_games=3000)
+    # compete(["sb4", "call", "call"], config, num_games=3000)
+    # compete(["sb4", "sb3", "sb2"], config, num_games=3000)
+    # compete(["sb4", "sb3", "sb2"], config, num_games=3000)
+    # compete(["sb5", "call", "call"], config, num_games=3000)
+    # compete(["sb5", "sb4", "sb3"], config, num_games=3000)
+    # compete(["sb5", "sb3", "sb2"], config, num_games=3000)
+    # compete(["sb5", "sb2", "call"], config, num_games=3000)
+    # compete(["sb6", "call", "call"], config, num_games=3000)
+    # compete(["sb6", "sb5", "sb4"], config, num_games=3000)
+    # compete(["sb6", "sb3", "sb2"], config, num_games=3000)
+    # compete(["sb6", "op11", "op12"], config, num_games=3000)
+    # compete(["sb5", "op110", "op111"], config, num_games=3000)
+    # compete(["call", "op115", "op116"], config, num_games=3000)
     compete(["call", "call", "call"], config, num_games=100)
 
 

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Final, Optional, Type
+from typing import Dict, Final, Type
 
 from neuropoker.models.base import BaseModel
 from neuropoker.models.neat.neat import NEATModel
@@ -10,6 +10,7 @@ from neuropoker.models.utils import load_model
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import CallPlayer, FoldPlayer, RandomPlayer
 from neuropoker.players.neat import NEATPlayer
+from neuropoker.players.ppo import PPOPlayer
 
 PLAYER_TYPES: Final[Dict[str, Type[BasePlayer]]] = {
     "fold": FoldPlayer,
@@ -29,8 +30,8 @@ class PlayerDefinition:
     """A class that defines players without instantiating them."""
 
     player_type: Type[BasePlayer]
-    model_type: Optional[Type[BaseModel]] = None
-    model_file: Optional[Path] = None
+    model_type: Type[BaseModel] | None = None
+    model_file: str | Path | None = None
 
     def load(self, uuid: str) -> BasePlayer:
         """Instantiate an instance of a player based on this definition.
@@ -66,6 +67,12 @@ class PlayerDefinition:
 
             # Create the player with a NEATModel
             return self.player_type(uuid, net=player_model.get_best_genome_network())
+
+        if issubclass(self.player_type, PPOPlayer):
+            if self.model_file is None:
+                raise ValueError("Model file must be provided for PPO player.")
+
+            return PPOPlayer.from_model_file(self.model_file, uuid)
 
         # Create the player
         return self.player_type(uuid)
