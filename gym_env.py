@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import random
 import time
-from typing import List
+from typing import List, Final
 
 from pypokerengine.engine.card import Card
 from pypokerengine.engine.player import Player
@@ -13,10 +13,11 @@ from pypokerengine.engine.table import Table
 
 from neuropoker.cards import SHORT_SUITS, get_card_list, SHORT_RANKS, SHORTER_SUITS
 from neuropoker.game_utils import NUM_PLAYERS, STACK, STREET_MAPPING, extract_features
-from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT
-from neuropoker.game import get_deck
+from neuropoker.game import BIG_BLIND_AMOUNT, SMALL_BLIND_AMOUNT, default_player_stats
+from neuropoker.game import get_deck, evaluate_performance, merge
 from neuropoker.players.naive import CallPlayer, FoldPlayer
 from neuropoker.players.base import BasePlayer
+
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.data_encoder import DataEncoder
@@ -37,7 +38,6 @@ def int_to_action(i, valid_actions):
     else:
         raise ValueError("Invalid action")
 
-
 def load_model_player(model_path, uuid):
     if model_path == "call":
         return CallPlayer()
@@ -47,14 +47,21 @@ def load_model_player(model_path, uuid):
 
 class ModelPlayer(BasePlayer):
     def __init__(self, model, uuid):
+        super().__init__()
+        self.dealer_fold = {}
+        self.dealer_call = {}
+        self.dealer_raise = {}
+        self.dealer_cards = {}
         self.model = model
         self.uuid = uuid
 
     def declare_action(self, valid_actions, hole_card, round_state):
         features = extract_features(hole_card, round_state, self.uuid)
         action = self.model.predict(features[np.newaxis, :])[0]
-        # print(self.uuid, action, hole_card)
-        return int_to_action(action, valid_actions)
+
+        action = int_to_action(action, valid_actions)
+        self.report_action(action, hole_card, round_state)
+        return action
 
 
 class PokerEnv(gym.Env):
@@ -85,21 +92,15 @@ class PokerEnv(gym.Env):
         print("SEED:", self.seed)
 
         self.set_players()
-
-
         self.cards = get_card_list(SHORTER_SUITS, SHORT_RANKS)
 
         self.reset()
 
     def set_players(self):
         self.opponent_path = random.choice(self.old_paths)
-        # self.opponent1_path = random.choice(self.old_paths)
-        # self.opponent2_path = random.choice(self.old_paths)
-        # opponent1 = load_model_player(self.opponent1_path, "opponent1")
-        # opponent2 = load_model_player(self.opponent2_path, "opponent2")
+        self.opponent1_path = random.choice(self.old_paths)
         self.opponent1 = load_model_player(self.opponent_path, "opponent1")
         self.opponent2 = load_model_player(self.opponent_path, "opponent2")
-
 
     def keep_playing(self, break_me):
         game_state = self.game_state
@@ -109,11 +110,10 @@ class PokerEnv(gym.Env):
                 break
 
             table = game_state["table"]
-            street = game_state["street"]
             round_state = DataEncoder.encode_round_state(game_state)
             player = table.seats.players[next_player]
             valid_actions = self.emulator.generate_possible_actions(game_state)
-            hole_card = DataEncoder.encode_player(self.game_state["table"].seats.players[next_player], holecard=True)["hole_card"]
+            hole_card = DataEncoder.encode_player(player, holecard=True)["hole_card"]
             assert len(hole_card) == 2
 
             action, bet = self.players[next_player].declare_action(valid_actions, hole_card, round_state)
@@ -125,8 +125,11 @@ class PokerEnv(gym.Env):
         self.num_games+=1
 
         dealer = 1
-        # seed = (self.num_games//3)%10000
-        seed = (self.num_games // 3) + self.seed
+        seed = (self.num_games // 3) % 10000
+        seed += self.seed
+
+        ## For the same cards dealt, the player should try each position.
+        ## Dealer is always 1 (arbitrary)
 
         self.player_pos = self.num_games%3
         self.player_names = ["", "", ""]
@@ -147,52 +150,29 @@ class PokerEnv(gym.Env):
         self.game_state, _event = self.emulator.start_new_round(self.initial_state)
         self.keep_playing(break_me=True)
 
-
         round_state = DataEncoder.encode_round_state(self.game_state)
         if round_state["street"] is None:
-            # Both opponents folded already...
-            # print("Both opponents folded already")
             self.bad_games += 1
             return self.reset()
 
         encoded_player = DataEncoder.encode_player(self.game_state["table"].seats.players[self.player_pos], holecard=True)
         hole_card = encoded_player["hole_card"]
 
-        # print("hole_card:", hole_card)
-        # print("self.player_pos:", self.player_pos)
-
-        # print(self.cards)
         extracted_features = extract_features(hole_card, round_state, "me")
-        # print(hole_card)
-        # print(round_state)
-        # print(extracted_features)
         extracted_features = extracted_features[np.newaxis, :]
-
         return extracted_features, {}
-
 
     def step(self, action):
         game_state = self.game_state
         hole_card = DataEncoder.encode_player(self.game_state["table"].seats.players[self.player_pos], holecard=True)["hole_card"]
         assert len(hole_card) == 2
 
-        # Must be my turn
         valid_actions = self.emulator.generate_possible_actions(game_state)
-        # print(valid_actions)
-        my_action = None
-        bet_amount = 0
         street = game_state["street"]
-
-
         my_action, bet_amount = int_to_action(action, valid_actions)
         self.statistics[(street, my_action)] = self.statistics.get((street, my_action), 0) + 1
 
-        # print(my_action, bet_amount)
         self.game_state, _event = self.emulator.apply_action(game_state, my_action, bet_amount)
-
-        # if street == Const.Street.FLOP or street == Const.Street.PREFLOP or street == Const.Street.TURN or street == Const.Street.RIVER:
-            # self.keep_playing(break_me=True) # We want to only play first turn properly, rest is all calls
-        # else:
         self.keep_playing(break_me=True)
 
         round_state = DataEncoder.encode_round_state(self.game_state)
@@ -201,51 +181,35 @@ class PokerEnv(gym.Env):
         if self.game_state["street"] == Const.Street.FINISHED:
             stack = self.game_state["table"].seats.players[self.player_pos].stack
             reward = (stack - STACK) 
-            # print("STACK:", stack)
             self.total_reward += reward
-            # print(stack - STACK)
             self.cumulative_reward += reward
 
-            # print(self.num_games)
-            RESET_THRESHOLD = 3000
+            RESET_THRESHOLD = 30000
             if self.num_games % RESET_THRESHOLD == 0:
-                print("opponent", self.opponent_path)
+                # print("opponent", self.opponent_path)
                 # print("opponent2:", self.opponent2_path)
-                print("Total games:", self.num_games)
-                print("Bad games:", self.bad_games)
-                print("Cumulative reward:", self.cumulative_reward)
-                print("Total reward:", self.total_reward)
-                print("Average reward:", self.total_reward / RESET_THRESHOLD)
-                print("Average rewards since beginning:", self.cumulative_reward / self.num_games)
-                print("bb per 100g:", self.total_reward * 100 / (RESET_THRESHOLD * BIG_BLIND_AMOUNT))
+                # print("Total games:", self.num_games)
+                # print("Bad games:", self.bad_games)
+                # print("Cumulative reward:", self.cumulative_reward)
+                # print("Total reward:", self.total_reward)
+                # print("Average reward:", self.total_reward / RESET_THRESHOLD)
+                # print("Average rewards since beginning:", self.cumulative_reward / self.num_games)
+                # print("bb per 100g:", self.total_reward * 100 / (RESET_THRESHOLD * BIG_BLIND_AMOUNT))
                 # print("Statistics:", self.statistics)
-                for i, street in enumerate(["preflop", "flop", "turn", "river"]):
-                    for act in ["fold", "call", "raise"]:
-                        print(f"{street} {act}: {self.statistics.get((i, act), 0)}")
-                print("")
+                # for i, street in enumerate(["preflop", "flop", "turn", "river"]):
+                    # for act in ["fold", "call", "raise"]:
+                        # print(f"{street} {act}: {self.statistics.get((i, act), 0)}")
+                # print("")
                 
-                STATS_FILE = "sb6_stats.txt"
-                with open(STATS_FILE, "a") as f:
-                    f.write(f"Total games: {self.num_games}\n")
-                    f.write(f"Cumulative reward: {self.cumulative_reward}\n")
-                    f.write(f"Total reward: {self.total_reward}\n")
-                    f.write(f"Average reward: {self.total_reward / RESET_THRESHOLD}\n")
-                    f.write(f"Average rewards since beginning: {self.cumulative_reward / self.num_games}\n")
-                    f.write(f"bb per 100g: {self.total_reward * 100 / (RESET_THRESHOLD * BIG_BLIND_AMOUNT)}\n")
-                    f.write("\n")
-
-
-
                 self.total_reward = 0
                 self.statistics = {}
-                self.set_players()
+
+                # self.set_players()
 
             # fresh_observation, _ = self.reset()
             return extracted_features, reward/STACK, True, False, {}
 
-
         return extracted_features, 0, False, False, {}
-
 
 
 FIRST_MODEL_PATH = "models/3p_3s/sb2"
@@ -253,6 +217,8 @@ SECOND_MODEL_PATH = "models/3p_3s/sb3"
 THIRD_MODEL_PATH = "models/3p_3s/sb4"
 FOURTH_MODEL_PATH = "models/3p_3s/sb5"
 CURRENT_MODEL_PATH = "models/3p_3s/sb6"
+CURRENT_MODEL_PATH_BACKUP = "models/3p_3s/sb6_backup"
+STATS_FILE = "sb6_stats.txt"
 
 NUM_ENVIRONMENTS = 16
 NET_ARCH = [128, 128]
@@ -273,7 +239,7 @@ if __name__ == "__main__":
         verbose=1,
         ent_coef=0.01,
         vf_coef=0.7,
-        n_steps=256,
+        n_steps=512,
         learning_rate=0.0001,
         policy_kwargs=dict(net_arch=NET_ARCH),
     )
@@ -281,13 +247,33 @@ if __name__ == "__main__":
     old_model = PPO.load(CURRENT_MODEL_PATH, env=env)
     model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
 
+    # Statically load opponents as the original model
+    p2 = load_model_player(CURRENT_MODEL_PATH, "opponent1")
+    p3 = load_model_player(CURRENT_MODEL_PATH, "opponent2")
+
     while (True):
         model.learn(total_timesteps=100000, reset_num_timesteps=False)
         print("SAVING MODEL")
         model.save(CURRENT_MODEL_PATH)
 
+        print("Evaluating model")
 
+        p1 = load_model_player(CURRENT_MODEL_PATH, "me")
+        player_names = ["me", "opponent1", "opponent2"]
+        players: List[BasePlayer]= [p1, p2, p3]
 
+        overall_performance = default_player_stats()
+        overall_performance["uuid"] = "me"
 
+        for i in range(0, 3):
+            player_names_i = player_names[i:] + player_names[:i]
+            players_i = players[i:] + players[:i]
+
+            performances = evaluate_performance(player_names_i, players_i, 2000, -1)
+            overall_performance = merge(overall_performance, performances["me"])
+
+        print("Overall performance:")
+        print("Average winning:", overall_performance["winnings"] / overall_performance["num_games"])
+        print(overall_performance)
 
 

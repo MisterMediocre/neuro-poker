@@ -3,6 +3,7 @@
 
 import random
 from typing import Final, List, Optional, Tuple
+from time import time
 
 from pypokerengine.engine.card import Card
 from pypokerengine.engine.deck import Deck
@@ -10,6 +11,7 @@ from pypokerengine.engine.deck import Deck
 SHORT_SUITS: Final[List[str]] = ["C", "D", "H", "S"]
 SHORTER_SUITS: Final[List[str]] = ["C", "D", "H"]
 SHORT_RANKS: Final[List[str]] = ["6", "7", "8", "9", "T", "J", "Q", "K", "A"]
+ALL_RANKS: Final[List[str]] = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"]
 
 
 def get_card_list(
@@ -104,7 +106,10 @@ def get_deck(cards: List[str] = [], seed: Optional[int] = None) -> Deck:
 
     card_ids: Final[List[int]] = [Card.from_str(s).to_id() for s in cards]
     if seed is not None:
-        # print("Seed used: ", seed)
-        random.seed(seed)  # Ignoring the seed as a test
-        random.shuffle(card_ids)
+        random.seed(seed)
+    else:
+        random.seed(time.time())
+
+    random.shuffle(card_ids)
+
     return Deck(cheat=True, cheat_card_ids=card_ids)

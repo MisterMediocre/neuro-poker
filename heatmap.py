@@ -4,8 +4,13 @@
 """
 from typing import Dict, Final, List
 import random
+from matplotlib.colors import ListedColormap
+import numpy as np
 import time
+from matplotlib import pyplot as plt
+from matplotlib.patches import Patch
 
+from neuropoker.cards import ALL_RANKS
 from neuropoker.game import (
     PlayerStats,
     default_player_stats,
@@ -15,7 +20,6 @@ from neuropoker.game import (
 from neuropoker.model import load_player
 from neuropoker.players.base import BasePlayer
 from gym_env import load_model_player
-from gym_env_opp import load_opposition_player
 
 CATALOG: Final[Dict[str, BasePlayer]] = {
     # Random players
@@ -44,15 +48,78 @@ CATALOG: Final[Dict[str, BasePlayer]] = {
     "sb5": load_model_player("models/3p_3s/sb5", "sb5"),
     "sb6": load_model_player("models/3p_3s/sb6", "sb6"),
 
-    "op115": load_opposition_player("models/3p_3s/op1", "op115", "call"),
-    "op116": load_opposition_player("models/3p_3s/op1", "op116", "call"),
+    # "op115": load_opposition_player("models/3p_3s/op1", "op115", "call"),
+    # "op116": load_opposition_player("models/3p_3s/op1", "op116", "call"),
 
-    "op110": load_opposition_player("models/3p_3s/op1", "op110", "sb5"),
-    "op111": load_opposition_player("models/3p_3s/op1", "op111", "sb5"),
+    # "op110": load_opposition_player("models/3p_3s/op1", "op110", "sb5"),
+    # "op111": load_opposition_player("models/3p_3s/op1", "op111", "sb5"),
 
-    "op11": load_opposition_player("models/3p_3s/op1", "op11", "sb6"),
-    "op12": load_opposition_player("models/3p_3s/op1", "op12", "sb6")
+    # "op11": load_opposition_player("models/3p_3s/op1", "op11", "sb6"),
+    # "op12": load_opposition_player("models/3p_3s/op1", "op12", "sb6")
 }
+
+def produce_heatmap(actions):
+    grid = np.zeros((len(ALL_RANKS), len(ALL_RANKS)))
+
+    for hole_cards, stats in actions.items():
+        same_suit = hole_cards[0][0] == hole_cards[1][0]
+
+        h1_rank = ALL_RANKS.index(hole_cards[0][1])
+        h2_rank = ALL_RANKS.index(hole_cards[1][1])
+
+        lower_rank = min(h1_rank, h2_rank)
+        higher_rank = max(h1_rank, h2_rank)
+
+        if same_suit:
+            assert h1_rank != h2_rank
+            x = lower_rank
+            y = higher_rank
+        else:
+            x = higher_rank
+            y = lower_rank
+
+        num_calls = stats.get("call", 0)
+        num_folds = stats.get("fold", 0)
+        num_raises = stats.get("raise", 0)
+        max_action = max(num_calls, num_folds, num_raises)
+        num_actions = num_calls + num_folds + num_raises
+
+        if num_actions == 0:
+            raise ValueError("No actions recorded for " + str(hole_cards))
+        elif num_raises == max_action:
+            grid_value = 3
+        elif num_calls == max_action:
+            grid_value = 2
+        elif num_folds == max_action:
+            grid_value = 1
+        else:
+            raise ValueError("One action must be the most common.")
+
+        grid[x][y] = grid_value
+
+    cmap = ListedColormap(["yellow", "red", "blue", "green"])
+    plt.figure(figsize=(13, 9))
+    plt.imshow(grid, cmap=cmap, origin="lower")
+    plt.xticks(range(len(ALL_RANKS)), ALL_RANKS)
+    plt.yticks(range(len(ALL_RANKS)), ALL_RANKS)
+    plt.gca().set_xticks([x - 0.5 for x in range(1, len(ALL_RANKS))], minor=True)
+    plt.gca().set_yticks([y - 0.5 for y in range(1, len(ALL_RANKS))], minor=True)
+    plt.grid(which="minor", color="black", linestyle="-", linewidth=1)
+    plt.xlabel("Same suit below the diagonal")
+    plt.ylabel("Different suit above and including the diagonal")
+    plt.plot(range(len(ALL_RANKS)), range(len(ALL_RANKS)), color="black", linestyle="--", linewidth=1)
+    plt.title("Dealer Action Heatmap")
+
+    legend_handles = [
+        Patch(facecolor='yellow', edgecolor='black', label='No data'),
+        Patch(facecolor='red', edgecolor='black', label='Fold'),
+        Patch(facecolor='blue', edgecolor='black', label='Call'),
+        Patch(facecolor='green', edgecolor='black', label='Raise'),
+    ]
+    plt.legend(handles=legend_handles, title="Actions", loc="upper right", bbox_to_anchor=(1.2, 1.0))
+
+    plt.show()
+
 
 def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -> None:
     """Run a multi-player poker game.
@@ -85,6 +152,7 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
         default["uuid"] = player_names[i]
         performances[player_names[i]] = default
 
+
     random.seed(time.time())
     seed = -2
     # We never train on negative seeds
@@ -109,61 +177,10 @@ def compete(player_1: str, player_2: str, player_3: str, num_games: int = 100) -
 
 def main():
     """Run the script."""
-    # Expect each to win 0 on average
-    # compete("fold", "fold2", "fold3", 30)
-
-    # Expect call player to win every single round, on average 50
-    # When small blind, will win 50
-    # When big blind, will win 25
-    # When neither, will win 75
-    # compete("call", "fold", "fold2", 1)
-
-    # Expect to match call player's performance, ie average 50
-    # Success
-    # compete("model_0", "fold", "fold2", 30)
-
-    # Expect same as before, since we're invariant to the order of the players
-    # Success
-    # compete("fold", "model_0", "fold2", 30)
-
-    # compete("call", "call2", "call3", 300)
-
-    # compete("call", "model_1", "fold", 100)
-
-    # Expect the model to fully exploit the folders
-    # compete("model_1", "fold", "fold2", 300)
 
     # Expect the model to fully exploit the call players
-    compete("call", "call2", "call3", 100)
-    # compete("model_1", "call", "call2", 500)
-    # compete("sb", "call", "call3", 1000)
-    # compete("sb_backup", "call", "call3", 1000)
-
-    # compete("sb2", "call", "call3", 3000)
-    # compete("sb3", "call", "call3", 3000)
-
-    # compete("sb3",  "sb2", "call3", 3000)
-    # compete("sb2",  "sb3", "call3", 3000)
-
-    # compete("sb4",  "call", "call3", 3000)
-    # compete("sb4", "sb3", "sb2", 3000)
-    # compete("sb4", "sb3", "sb2", 3000)
-
-    # compete("sb5", "call", "call3", 3000)
-    # compete("sb5", "sb4", "sb3", 3000)
-    # compete("sb5", "sb3", "sb2", 3000)
-    # compete("sb5", "sb2", "call3", 3000)
-
-    # compete("sb6", "call", "call3", 3000)
-    # compete("sb6", "sb5", "sb4", 3000)
-    # compete("sb6", "sb3", "sb2", 3000)
-
-    compete("sb6", "op11", "op12", 3000)
-    compete("sb5", "op110", "op111", 3000)
-    compete("call", "op115", "op116", 3000)
-
-    # Expect the models to tie, while taking advantage of the fold player
-    # compete("model_1", "model_1_2", "fold", 30)
+    compete("sb6", "call2", "call3", 1000)
+    produce_heatmap(CATALOG["sb6"].dealer_action)
 
 
 if __name__ == "__main__":

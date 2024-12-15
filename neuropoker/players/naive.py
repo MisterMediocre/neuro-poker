@@ -18,10 +18,11 @@ class RandomPlayer(BasePlayer):
         if action["action"] == "raise":
             # Some multiples of min
             multiple = random.choice([1, 2, 3])
-            return action["action"], multiple*action["amount"]["min"]
-
-        return action["action"], action["amount"]
-
+            res = (action["action"], multiple*action["amount"]["min"])
+        else:
+            res = action["action"], action["amount"]
+        self.report_action(res, hole_card, round_state)
+        return res
 
 class CallPlayer(BasePlayer):
     """A player which always calls."""
@@ -29,8 +30,9 @@ class CallPlayer(BasePlayer):
     def declare_action(self, valid_actions, hole_card, round_state):
         """Declare an action, which is to always call."""
         action = valid_actions[1]
-        return action["action"], action["amount"]
-
+        res = (action["action"], action["amount"])
+        self.report_action(res, hole_card, round_state)
+        return res
 
 class FoldPlayer(RandomPlayer):
     """A player which always folds."""
@@ -38,5 +40,6 @@ class FoldPlayer(RandomPlayer):
     def declare_action(self, valid_actions, hole_card, round_state):
         """Declare an action, which is to always fold."""
         action = valid_actions[0]
-        # print(action['action'])
-        return action["action"], action["amount"]
+        res = (action["action"], action["amount"])
+        self.report_action(res, hole_card, round_state)
+        return res

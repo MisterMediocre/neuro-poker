@@ -1,10 +1,11 @@
 """Classes and functions for poker games.
 """
 
-from typing import Any, Dict, Final, List, TypedDict
+from typing import Any, Dict, Final, List, TypedDict, Tuple
 
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.player import Player
+from pypokerengine.engine.table import Table
 
 from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list, get_deck
 from neuropoker.game_utils import NUM_PLAYERS, STACK
@@ -25,6 +26,11 @@ class PlayerStats(TypedDict):
     allin: int
     big_blinds: int
     small_blinds: int
+    plays: Dict[Tuple[int, str, str, int], int]
+    dealer_fold: Dict[Tuple[str, str], int]
+    dealer_call: Dict[Tuple[str, str], int]
+    dealer_raise: Dict[Tuple[str, str], int]
+
     # preflop_folds: int
     # preflop_calls: int
     # preflop_raises: int
@@ -56,6 +62,11 @@ def default_player_stats() -> PlayerStats:
         "calls": 0,
         "raises": 0,
         "allin": 0,
+        "plays": {},
+        "dealer_fold": {},
+        "dealer_call": {},
+        "dealer_raise": {},
+
         # "preflop_folds": 0,
         # "preflop_calls": 0,
         # "preflop_raises": 0,
@@ -85,7 +96,6 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
             Each player's stats.
     """
 
-    # print(events)
 
     player_stats: Dict[str, PlayerStats] = {}
     players: Final[List[Player]] = game_state["table"].seats.players
@@ -95,16 +105,19 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
         default["winnings"] = player.stack - STACK
         default["num_games"] = 1
 
-        # print(player.action_histories)
         player_stats[player.uuid] = default
 
     for event in events:
         if event["type"] == "event_round_finish":
             # Process action histories to count actions
-            for _street, actions in event["round_state"]["action_histories"].items():
+            for street, actions in event["round_state"]["action_histories"].items():
                 for action in actions:
                     uuid = action["uuid"]
                     # print(uuid, action["action"])
+
+                    # hole_card = tuple(event["round_state"]["seats"][uuid]["hole_card"])
+                    # print(hole_card)
+
                     assert uuid in player_stats
                     if action["action"] == "FOLD":
                         player_stats[uuid]["folds"] += 1
@@ -117,6 +130,8 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
                     elif action["action"] == "SMALLBLIND":
                         player_stats[uuid]["small_blinds"] += 1
 
+
+
             for p in event["round_state"]["seats"]:
                 p: Dict[str, Any]
                 uuid = p["uuid"]
@@ -127,6 +142,15 @@ def read_game(game_state, events) -> Dict[str, PlayerStats]:
 
     return player_stats
 
+
+def dict_add(d1: Dict[Tuple[str, str], int], d2: Dict[Tuple[str, str], int]) -> Dict[Tuple[str, str], int]:
+    """Add two dictionaries of tuples."""
+    for k, v in d2.items():
+        if k in d1:
+            d1[k] += v
+        else:
+            d1[k] = v
+    return d1
 
 def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
     """Merge two players' stats into one.
@@ -152,6 +176,10 @@ def merge(stats1: PlayerStats, stats2: PlayerStats) -> PlayerStats:
         "allin": stats1["allin"] + stats2["allin"],
         "big_blinds": stats1["big_blinds"] + stats2["big_blinds"],
         "small_blinds": stats1["small_blinds"] + stats2["small_blinds"],
+        "plays": stats1["plays"],
+        "dealer_fold": dict_add(stats1["dealer_fold"], stats2["dealer_fold"]),
+        "dealer_call": dict_add(stats1["dealer_call"], stats2["dealer_call"]),
+        "dealer_raise": dict_add(stats1["dealer_raise"], stats2["dealer_raise"]),
         # "preflop_folds": stats1["preflop_folds"] + stats2["preflop_folds"],
         # "preflop_calls": stats1["preflop_calls"] + stats2["preflop_calls"],
         # "preflop_raises": stats1["preflop_raises"] + stats2["preflop_raises"],
