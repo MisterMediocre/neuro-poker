@@ -16,11 +16,11 @@ STREET_MAPPING: Final[Dict[str, int]] = {
 
 # Community card index -> street in which the card was dealt
 COMMUNITY_CARD_MAPPING: Final[Dict[int, str]] = {
-    0: "preflop",
-    1: "preflop",
-    2: "preflop",
-    3: "flop",
-    4: "turn",
+    0: "flop",
+    1: "flop",
+    2: "flop",
+    3: "turn",
+    4: "river",
 }
 
 # State name -> index

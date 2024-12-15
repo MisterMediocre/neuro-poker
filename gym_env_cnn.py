@@ -155,7 +155,7 @@ def main() -> None:
             "ent_coef": 0.01,
             "vf_coef": 0.7,
             "n_steps": 256,
-            # "learning_rate": 0.003,
+            "learning_rate": 0.001,
         },
         policy_kwargs=POLICY_KWARGS,
         num_environments=num_environments,

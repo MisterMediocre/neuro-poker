@@ -232,7 +232,7 @@ class CNNFeaturesCollector(FeaturesCollector):
     def __init__(self) -> None:
         """Initialize the CNNFeaturesCollector."""
         super().__init__(
-            shape=(4, 8, 52),
+            shape=(10, 4, 13),
             low=0.0,
             high=1.0,
         )
@@ -241,55 +241,98 @@ class CNNFeaturesCollector(FeaturesCollector):
         self.num_streets = 4
         self.stack = STACK
 
-    def _encode_card_tensor(self, hole_card, community_cards) -> np.ndarray:
-        """Encode cards into a one-hot tensor.
+    def _encode_card_set_tensor(self, card_set) -> np.ndarray:
+        """Encode n cards into an n-hot, 4 x 13 tensor.
 
         Parameters:
-            hole_card: List[str]
+            card_set: List[str]
+                The list of cards to encode.
+
+        Returns:
+            card_set_tensor: np.ndarray
+                The tensor encoding the cards.
+
+        The tensor is structured as follows:
+            (Width x Height)
+
+            Width: Number of suits (4)
+                0: Clubs
+                1: Diamonds
+                2: Hearts
+                3: Spades
+            Height: Number of ranks (13)
+                0: 2
+                1: 3
+                ...
+                11: K
+                12: A
+
+        This is used by AlphaHoldem.
+        """
+        card_set_tensor: Final[np.ndarray] = np.zeros((4, 13))
+
+        for card in card_set:
+            rank, suit = get_card_indices(card, ALL_RANKS, ALL_SUITS)
+            card_set_tensor[suit, rank] = 1
+
+        return card_set_tensor
+
+    def _encode_card_tensor(
+        self, hole_cards: List[str], community_cards: List[str]
+    ) -> np.ndarray:
+        """Encode cards information into a tensor.
+
+        Parameters:
+            hole_cards: List[str]
                 The private cards of the player.
             community_cards: List[str]
-                The public cards on the table.
+                The public cards on the table, in order of appearance.
 
         Returns:
             card_tensor: np.ndarray
                 The tensor encoding the cards.
 
         The tensor is structured as follows:
-            (Height x Width)
+            (Channels x Width x Height)
 
-            Height: Number of cards in hand (7)
-            Width: Number of cards in deck (52)
+            Channels: Number of sub-decks (6)
+                0: Hole cards
+                1: Cards revealed in flop
+                2: Card revealed in turn
+                3: Card revealed in river
+                4: Public cards (flop, turn, river)
+                5: All cards (flop, turn, river, hole)
+            Width: Number of suits (4)
+            Height: Number of ranks (13)
         """
-        num_ranks: Final[int] = len(ALL_RANKS)
-        num_suits: Final[int] = len(ALL_SUITS)
+        # num_ranks: Final[int] = len(ALL_RANKS)
+        # num_suits: Final[int] = len(ALL_SUITS)
 
-        card_tensor: Final[np.ndarray] = np.zeros(
-            (
-                # Height   (x) : Deck
-                # Community cards (5, one-hot) + hole cards (2, two-hot)
-                6,
-                # Width    (y) : Cards
-                # Use full deck in feature encoding, even if using a shorter deck.
-                num_suits * num_ranks,
-            ),
-            dtype=np.float32,
-        )
+        # Get each set of cards
+        street_cards: Dict[str, List[str]] = {
+            street: [] for street in COMMUNITY_CARD_MAPPING.values()
+        }
+        street_cards["hole"] = hole_cards
 
-        # First rows for community cards
         for card_i, card in enumerate(community_cards):
-            rank, suit = get_card_indices(card, ALL_RANKS, ALL_SUITS)
+            street: str = COMMUNITY_CARD_MAPPING[card_i]
+            street_cards[street].append(card)
 
-            # Map (suit, rank) to index
-            card_tensor[card_i, suit * num_ranks + rank] = 1
+        # Encode each set of cards as an n-hot array
+        street_arrs: Dict[str, np.ndarray] = {
+            street: self._encode_card_set_tensor(street_cards[street])
+            for street in street_cards
+        }
 
-        # Last row for hole cards
-        for card in hole_card:
-            rank, suit = get_card_indices(card, ALL_RANKS, ALL_SUITS)
+        # Add additional tensors (public, all)
+        street_arrs["public"] = (
+            street_arrs["flop"] + street_arrs["turn"] + street_arrs["river"]
+        )
+        street_arrs["all"] = street_arrs["public"] + street_arrs["hole"]
 
-            # Hole cards at row 7
-            card_tensor[-1, suit * num_ranks + rank] = 1
-
-        return card_tensor
+        card_arr = np.stack([street_arrs[street] for street in street_arrs])
+        # print(card_tensor.shape)
+        return card_arr
 
     def _encode_bets_tensor(
         self,
@@ -313,18 +356,13 @@ class CNNFeaturesCollector(FeaturesCollector):
                 The tensor encoding the bets made by each
 
         The tensor is structured as follows:
-            (Height x Width)
+            (Width x Height)
 
-            Height: Number of players
-            Width: Number of streets
+            Width: Number of players
+            Height: Number of streets
         """
         bet_tensor: Final[np.ndarray] = np.zeros(
-            (
-                # Height   (x) : Players
-                self.num_players,
-                # Width    (y) : Streets
-                self.num_streets,
-            ),
+            (self.num_players, self.num_streets),
             dtype=np.float32,
         )
 
@@ -407,6 +445,100 @@ class CNNFeaturesCollector(FeaturesCollector):
 
         return legal_actions_tensor
 
+    def _action_to_index(self, action: str) -> int:
+        """Map an action back to its index.
+
+        Parameters:
+            action: Tuple[str, int]
+                The action to map.
+
+        Returns:
+            index: int
+                The index of the action.
+        """
+        match action.lower():
+            case "fold":
+                return 0
+            case "call":
+                return 1
+            case "raise":
+                return 2
+            case "smallblind":
+                return 3
+            case "bigblind":
+                return 4
+            case "ante":
+                return 5
+            case _:
+                raise ValueError("Invalid action")
+
+    def _player_to_index(self, player: str) -> int:
+        """Map a player back to its index.
+
+        Parameters:
+            player: str
+                The player to map.
+
+        Returns:
+            index: int
+                The index of the player.
+        """
+        if player == "me":
+            return 0
+
+        return int(player.replace("opponent", "").replace("_", ""))
+
+    def _encode_action_tensor(
+        self,
+        round_state: Dict[str, Any],
+        player_positions: Dict[str, int],
+        # legal_actions: List[str],
+    ) -> np.ndarray:
+        """Encode action information into a tensor.
+
+        Parameters:
+            round_state: Dict[str, Any]
+                The state of the current round.
+            player_positions: Dict[str, int]
+                The position of each players at the table.
+            legal_actions: List[str]
+                The list of legal actions for the player.
+
+        Returns:
+            action_arr: np.ndarray
+                The array encoding the actions.
+
+
+        The tensor is structured as follows:
+            (Channels x Width x Height)
+
+            Channels: Number of streets (4)
+            Width: Number of players (3)
+            Height: Number of actions (6)
+        """
+        action_tensor: Final[np.ndarray] = np.zeros((4, 3, 6))
+
+        for street, actions in round_state["action_histories"].items():
+            street_idx: int = STREET_MAPPING[street] - 1
+            for action_dict in actions:
+                action: str = action_dict["action"]
+                action_idx: int = self._action_to_index(action)
+
+                player: str = action_dict["uuid"]
+                player_idx: int = self._player_to_index(player)
+
+                # amount: int = action_dict["amount"]
+                # print(
+                #     f"{(street_idx, action_idx, player_idx)}",
+                #     street,
+                #     action,
+                #     player,
+                #     amount,
+                # )
+                action_tensor[street_idx, player_idx, action_idx] = 1
+
+        return action_tensor
+
     @override
     def extract_features(
         self,
@@ -425,43 +557,37 @@ class CNNFeaturesCollector(FeaturesCollector):
                 The player's UUID
 
         Returns:
-            features: np.ndarray
-                The features extracted from the game state.
+            arr: np.ndarray
+                The feature array extracted from the game state.
 
         The tensor is structured as follows:
-            (Channels x Height x Width)
+            (Channels x Width x Height)
 
-            Channels:
-                0: Cards
-                1: Player bets
-                2: Stack sizes
-                3: Player states
+            Channels: 8
+                0-5: Cards
+                6-9: Actions
 
-            Height:
-                ?
-
-            Width:
-                Number of cards
+            Width: ?
+            Height: ?
         """
         # Initialize tensor: Channels x Height x Width
-        tensor: np.ndarray = np.zeros(
+        arr: np.ndarray = np.zeros(
             self.shape,
             dtype=self.dtype,
         )
 
         #
-        # Channel 0: Cards
+        # Channels 0-5: Cards
         #
         community_cards: Final[List[str]] = round_state["community_card"]
-        card_tensor: Final[np.ndarray] = self._encode_card_tensor(
+        card_arr: Final[np.ndarray] = self._encode_card_tensor(
             hole_card, community_cards
         )
-        tensor[0, : card_tensor.shape[0], : card_tensor.shape[1]] = card_tensor
+        arr[0:6, 0:4, 0:13] = card_arr
 
         #
-        # Channel 1: Player bets
+        # Channels 6-?: Actions
         #
-        # Get player positions
         dealer_index: Final[int] = round_state["dealer_btn"]
         rotated_seats: Final[List[Dict[str, Any]]] = (
             round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
@@ -470,35 +596,52 @@ class CNNFeaturesCollector(FeaturesCollector):
             p["uuid"]: i for i, p in enumerate(rotated_seats)
         }
 
-        bet_tensor: Final[np.ndarray] = self._encode_bets_tensor(
+        # legal_actions = round_state["legal_actions"]
+        action_arr: Final[np.ndarray] = self._encode_action_tensor(
             round_state,
-            player_positions,
+            player_positions,  # legal_actions
         )
-        tensor[1, : bet_tensor.shape[0], : bet_tensor.shape[1]] = bet_tensor
+        arr[6:10, 0:3, 0:6] = action_arr
 
         #
-        # Channel 2: Stack sizes
+        # Channel 1: Player bets
         #
-        stack_tensor: Final[np.ndarray] = self._encode_stack_tensor(
-            round_state, player_positions
-        )
-        tensor[2, : stack_tensor.shape[0], : stack_tensor.shape[1]] = stack_tensor
+        # Get player positions
+        # dealer_index: Final[int] = round_state["dealer_btn"]
+        # rotated_seats: Final[List[Dict[str, Any]]] = (
+        #     round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
+        # )
+        # player_positions: Final[Dict[str, int]] = {
+        #     p["uuid"]: i for i, p in enumerate(rotated_seats)
+        # }
 
-        #
-        # Channel 3: Player states
-        #
-        state_tensor: Final[np.ndarray] = self._encode_state_tensor(
-            round_state, player_positions
-        )
-        tensor[3, : state_tensor.shape[0], : state_tensor.shape[1]] = state_tensor
+        # bet_tensor: Final[np.ndarray] = self._encode_bets_tensor(
+        #     round_state,
+        #     player_positions,
+        # )
+        # tensor[5, : bet_tensor.shape[0], : bet_tensor.shape[1]] = bet_tensor
+
+        # #
+        # # Channel 2: Stack sizes
+        # #
+        # stack_tensor: Final[np.ndarray] = self._encode_stack_tensor(
+        #     round_state, player_positions
+        # )
+        # tensor[6, : stack_tensor.shape[0], : stack_tensor.shape[1]] = stack_tensor
+
+        # #
+        # # Channel 3: Player states
+        # #
+        # state_tensor: Final[np.ndarray] = self._encode_state_tensor(
+        #     round_state, player_positions
+        # )
+        # tensor[7, : state_tensor.shape[0], : state_tensor.shape[1]] = state_tensor
 
         # Encode legal actions
         # legal_actions = round_state["legal_actions"]
         # tensor[4, :, :] = encode_legal_actions_tensor(legal_actions)
 
-        if tensor.shape != self.shape:
-            raise ValueError(
-                f"Expected features shape {self.shape}, got {tensor.shape}"
-            )
+        if arr.shape != self.shape:
+            raise ValueError(f"Expected features shape {self.shape}, got {arr.shape}")
 
-        return tensor
+        return arr
