@@ -15,18 +15,31 @@ from neuropoker.game.cards import (
 STACK: Final[int] = 1000
 NUM_PLAYERS: Final[int] = 3
 
-STREET_MAPPING: Final[Dict[int, int]] = {
-    0: 1,  # Preflop
-    1: 1,  # Preflop
-    2: 1,  # Preflop
-    3: 2,  # Flop
-    4: 3,  # Turn
+# Street name -> index
+STREET_MAPPING: Final[Dict[str, int]] = {
+    "preflop": 1,
+    "flop": 2,
+    "turn": 3,
+    "river": 4,
 }
+
+# Community card index -> street in which the card was dealt
+COMMUNITY_CARD_MAPPING: Final[Dict[int, str]] = {
+    0: "preflop",
+    1: "preflop",
+    2: "preflop",
+    3: "flop",
+    4: "turn",
+}
+
+# State name -> index
 STATE_MAPPING: Final[Dict[str, int]] = {
     "folded": 0,
     "participating": 1,
     "allin": 2,
 }
+
+# Action name -> index
 ACTION_MAPPING: Final[Dict[str, int]] = {
     "fold": 0,
     "call": 1,
@@ -34,39 +47,101 @@ ACTION_MAPPING: Final[Dict[str, int]] = {
 }
 
 
-def encode_cards_tensor(hole_card, community_cards):
-    card_tensor = np.zeros(
-        (8, len(SHORT_RANKS) * len(SHORTER_SUITS)), dtype=np.float32
-    )  # Rows for community and private cards
+def encode_cards_tensor(hole_card, community_cards) -> np.ndarray:
+    """Encode cards into a one-hot tensor.
+
+    Parameters:
+        hole_card: List[str]
+            The private cards of the player.
+        community_cards: List[str]
+            The public cards on the table.
+
+    Returns:
+        card_tensor: np.ndarray
+            The tensor encoding the cards.
+    """
+
+    card_tensor: Final[np.ndarray] = np.zeros(
+        (
+            # x: rows
+            8,
+            # y: cards
+            len(SHORT_RANKS) * len(SHORTER_SUITS),
+        ),
+        dtype=np.float32,
+    )
+
+    ranks: Final[List[str]] = SHORT_RANKS
+    suits: Final[List[str]] = SHORTER_SUITS
+
+    num_ranks: Final[int] = len(ranks)
+    num_suits: Final[int] = len(suits)
+
+    # Rows for community cards
     for i, card in enumerate(community_cards):
-        rank, suit = get_card_indices(card, SHORT_RANKS, SHORTER_SUITS)
-        card_tensor[i, suit * len(SHORT_RANKS) + rank] = 1  # Map (suit, rank) to index
+        rank, suit = get_card_indices(card, ranks, suits)
+        card_tensor[i, suit * num_ranks + rank] = 1  # Map (suit, rank) to index
+
+    # Last row for hole cards
     for card in hole_card:
-        rank, suit = get_card_indices(card, SHORT_RANKS, SHORTER_SUITS)
-        card_tensor[7, suit * len(SHORT_RANKS) + rank] = 1  # Hole cards at row 7
+        rank, suit = get_card_indices(card, ranks, suits)
+        card_tensor[-1, suit * num_ranks + rank] = 1  # Hole cards at row 7
+
     return card_tensor
 
 
-def encode_player_bets_tensor(round_state, player_positions):
+def encode_player_bets_tensor(
+    round_state,
+    player_positions,
+    num_players: int = NUM_PLAYERS,
+    num_streets: int = 4,
+    num_cards: int = len(SHORT_RANKS) * len(SHORTER_SUITS),
+) -> np.ndarray:
+    """Encode bets for each street (preflop, flop, turn, river).
+
+    Parameters:
+        round_state: Dict[str, Any]
+            The state of the current round.
+        player_positions: Dict[str, int]
+            The position of each players at the table.
+        num_players: int
+            The number of players at the table.
+        num_streets: int
+            The number of streets in the game.
+        num_cards: int
+            The number of cards in the game.
+
+    Returns:
+        bet_tensor: np.ndarray
+            The tensor encoding the bets made by each
     """
-    Encode bets separately for each street (preflop, flop, turn, river).
-    """
-    num_streets = 4  # Preflop, Flop, Turn, River
-    bet_tensor = np.zeros(
-        (num_streets * NUM_PLAYERS, len(SHORT_RANKS) * len(SHORTER_SUITS)),
+    bet_tensor: Final[np.ndarray] = np.zeros(
+        (
+            # row / x: players
+            num_players * num_streets,
+            # col / y: cards
+            num_cards,
+        ),
         dtype=np.float32,
     )
 
     for street, actions in round_state["action_histories"].items():
-        street_index = STREET_MAPPING[street] - 1  # Map street to an index (0-based)
-        print(round_state["action_histories"])
+        # Map street to an integer index
+        #
+        # Zero-indexed (0 to 4)
+        street_index = STREET_MAPPING[street] - 1
+
+        # Iterate over actions in the street
         for action in actions:
             if action["action"].lower() in ["call", "raise"]:
-                bet = action["amount"]
-                normalized_bet = bet / STACK  # Normalize
-                player_idx = player_positions[action["uuid"]]
-                row_idx = street_index * NUM_PLAYERS + player_idx
-                bet_tensor[row_idx, :] += (
+                # Encode the bet made by the player
+                bet: float = action["amount"]
+                normalized_bet: float = bet / STACK  # Normalize
+
+                player_pos: int = player_positions[action["uuid"]]
+                player_street_pos: int = street_index * NUM_PLAYERS + player_pos
+
+                bet_tensor[player_street_pos, :] += (
                     normalized_bet  # Add normalized bet for the specific street
                 )
 
@@ -114,34 +189,81 @@ def encode_legal_actions_tensor(legal_actions):
 
 
 def extract_features_tensor(
-    hole_card: list[str], round_state: dict, player_uuid: str
+    hole_card: list[str],
+    round_state: dict,
+    player_uuid: str,
+    num_players: int = NUM_PLAYERS,
+    num_streets: int = 4,
+    num_cards: int = len(SHORT_RANKS) * len(SHORTER_SUITS),
 ) -> np.ndarray:
-    # Initialize tensor: Channels x Height x Width
-    tensor = np.zeros((4, 8, len(SHORT_RANKS) * len(SHORTER_SUITS)), dtype=np.float32)
+    """Extract features for a poker agent from the current game state.
 
-    # Encode cards
-    community_cards = round_state["community_card"]
+    Parameters:
+        hole_card: List[str]
+            The private cards of the player.
+        round_state: Dict[str, Any]
+            The state of the current round.
+        player_uuid: str
+            The player's UUID
+        num_players: int
+            The number of players at the table.
+        num_cards: int
+            The number of cards in the game.
+
+    Returns:
+        tensor: np.ndarray
+            The features extracted from the game state.
+    """
+    # Initialize tensor: Channels x Height x Width
+    tensor: np.ndarray = np.zeros(
+        (
+            # x: channels (cards, bets, stack sizes, states)
+            4,
+            # y: ?
+            8,
+            # z: cards
+            num_cards,
+        ),
+        dtype=np.float32,
+    )
+
+    #
+    # Channel 0: Cards
+    #
+    community_cards: Final[List[str]] = round_state["community_card"]
     tensor[0, :, :] = encode_cards_tensor(hole_card, community_cards)
 
-    # Player positions
-    dealer_index = round_state["dealer_btn"]
-    rotated_seats = (
+    #
+    # Channel 1: Player bets
+    #
+    # Get player positions
+    dealer_index: Final[int] = round_state["dealer_btn"]
+    rotated_seats: Final[List[Dict[str, Any]]] = (
         round_state["seats"][dealer_index:] + round_state["seats"][:dealer_index]
     )
-    player_positions = {p["uuid"]: i for i, p in enumerate(rotated_seats)}
+    player_positions: Final[Dict[str, int]] = {
+        p["uuid"]: i for i, p in enumerate(rotated_seats)
+    }
 
-    # Encode player bets
-    tensor[1, :NUM_PLAYERS, :] = encode_player_bets_tensor(
+    # tensor[1, :num_players, :] = encode_player_bets_tensor(
+    #     round_state,
+    #     player_positions,
+    #     num_players=num_players,
+    #     num_streets=num_streets,
+    #     num_cards=num_cards,
+    # )
+
+    #
+    # Channel 2: Stack sizes
+    #
+    tensor[2, :num_players, :] = encode_stack_sizes_tensor(
         round_state, player_positions
     )
 
-    # Encode stack sizes
-    tensor[2, :NUM_PLAYERS, :] = encode_stack_sizes_tensor(
-        round_state, player_positions
-    )
-
-    # Encode player states
-    tensor[3, :NUM_PLAYERS, :] = encode_player_states_tensor(
+    #
+    # Channel 3: Player states
+    #
+    tensor[3, :num_players, :] = encode_player_states_tensor(
         round_state, player_positions
     )
 
@@ -214,7 +336,7 @@ def extract_features(
     # for card in community_cards:
     for i, card in enumerate(community_cards):
         idx: int = get_card_index(card, game_suits, game_ranks)
-        public_cards[idx] = STREET_MAPPING[i]
+        public_cards[idx] = STREET_MAPPING[COMMUNITY_CARD_MAPPING[i]]
 
     for card in hole_card:
         idx: int = get_card_index(card, game_suits, game_ranks)

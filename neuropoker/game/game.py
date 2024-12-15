@@ -15,6 +15,12 @@ SMALL_BLIND_AMOUNT: Final[int] = 25
 BIG_BLIND_AMOUNT: Final[int] = 50
 STACK: Final[int] = 1000
 
+# Type for game state
+GameState = Dict[str, Any]
+
+# Type for event state
+EventState = List[Dict[str, Any] | None] | List[Dict[str, Any]]
+
 
 class PlayerStats(TypedDict):
     """A player's statistics for a game."""
@@ -298,13 +304,17 @@ class Game:
             stack=config["stack"],
         )
 
-    def read_game(self, game_state, events) -> Dict[str, PlayerStats]:
+    def read_game(
+        self,
+        game_state: GameState,
+        events: EventState,
+    ) -> Dict[str, PlayerStats]:
         """Obtain each player's stats for a game.
 
         Parameters:
-            game_state: Dict[str, Any]
+            game_state: GameState
                 The game state.
-            events: List[Dict[str, Any]]
+            events: EventState
                 The events of the game.
 
         Returns:
@@ -326,6 +336,9 @@ class Game:
             player_stats[player.uuid] = default
 
         for event in events:
+            if event is None:
+                continue
+
             if event["type"] == "event_round_finish":
                 # Process action histories to count actions
                 for _street, actions in event["round_state"][
@@ -356,29 +369,17 @@ class Game:
 
         return player_stats
 
-    def play(
-        self,
-        dealer_button: int = 0,
-        seed: Optional[int] = None,
-    ) -> Dict[str, PlayerStats]:
-        """Play a single round/game of Poker.
-
-        Parameters:
-            dealer_button: int
-                The position of the dealer button.
-            games_played: int
-                The number of games previously played.
-                (Used to keep decks unique in each game)
-            seed: Optional[int]
-                The seed to use to shuffle the deck.
+    def get_initial_state(
+        self, dealer_button: int = 0, seed: int | None = None
+    ) -> GameState:
+        """Get the initial state of the game.
 
         Returns:
-            winnings: List[float]
-                The winnings of each player.
+            initial_state: Dict[str, Any]
+                The initial state of the game.
         """
-        # winnings: List[float] = [0.0] * len(self.players)
-        initial_state: Final[Dict[str, Any]] = (
-            self.emulator.generate_initial_game_state(self.players_info)
+        initial_state: Final[GameState] = self.emulator.generate_initial_game_state(
+            self.players_info
         )
 
         # Same seed means same cards dealt
@@ -388,9 +389,51 @@ class Game:
         )
         initial_state["table"].dealer_btn = dealer_button
 
-        game_state, _event = self.emulator.start_new_round(initial_state)
-        game_state, events = self.emulator.run_until_round_finish(game_state)
+        return initial_state
 
+    def start_round(
+        self, dealer_button: int = 0, seed: int | None = None
+    ) -> Tuple[GameState, EventState]:
+        """Start a round of poker.
+
+        Parameters:
+            dealer_button: int
+                The position of the dealer button.
+            seed: Optional[int]
+                The seed to use to shuffle the deck.
+
+        Returns:
+            game_state: GameState
+                The game state.
+            events: EventState
+                The event.
+        """
+        initial_state: Final[GameState] = self.get_initial_state(
+            dealer_button=dealer_button, seed=seed
+        )
+
+        game_state, events = self.emulator.start_new_round(initial_state)
+        return game_state, events
+
+    def play(
+        self,
+        dealer_button: int = 0,
+        seed: int | None = None,
+    ) -> Dict[str, PlayerStats]:
+        """Play a single round/game of Poker.
+
+        Parameters:
+            dealer_button: int
+                The position of the dealer button.
+            seed: Optional[int]
+                The seed to use to shuffle the deck.
+
+        Returns:
+            winnings: List[float]
+                The winnings of each player.
+        """
+        game_state, _ = self.start_round(dealer_button=dealer_button, seed=seed)
+        game_state, events = self.emulator.run_until_round_finish(game_state)
         return self.read_game(game_state, events)
 
     def play_multiple(
