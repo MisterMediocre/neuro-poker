@@ -6,8 +6,6 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict, Final
 
-from termcolor import colored
-
 from neuropoker.extra.torch import get_device
 from neuropoker.game.features import (
     CNNFeaturesCollector,
@@ -117,39 +115,39 @@ def main() -> None:
     num_epochs: Final[int] = args.num_epochs
     device: Final[str] = get_device() if args.device == "auto" else args.device
 
-    #
-    # Print arguments
-    #
-    print(
-        colored("------------ gym_env_cnn -------------", color="blue", attrs=["bold"])
-    )
-    print(colored("Models", color="blue", attrs=["bold"]))
-    print(
-        "    "
-        + colored(f'{"Starting model":<16}:', color="blue")
-        + f" {starting_model_path}"
-    )
+    # #
+    # # Print arguments
+    # #
+    # print(
+    #     colored("------------ gym_env_cnn -------------", color="blue", attrs=["bold"])
+    # )
+    # print(colored("Models", color="blue", attrs=["bold"]))
     # print(
     #     "    "
-    #     + colored(f'{"Opponent model":<14}:', color="blue")
-    #     + f" {opponent_model_path}"
+    #     + colored(f'{"Starting model":<16}:', color="blue")
+    #     + f" {starting_model_path}"
     # )
-    print("    " + colored(f'{"Output models":<16}:', color="blue") + f" {model_dir}")
+    # # print(
+    # #     "    "
+    # #     + colored(f'{"Opponent model":<14}:', color="blue")
+    # #     + f" {opponent_model_path}"
+    # # )
+    # print("    " + colored(f'{"Output models":<16}:', color="blue") + f" {model_dir}")
 
-    print(colored("Training", color="blue", attrs=["bold"]))
-    print(
-        "    "
-        + colored(f'{"Environments":<16}: ', color="blue")
-        + f"{num_environments}"
-    )
-    print("    " + colored(f'{"Timesteps":<16}: ', color="blue") + f"{num_timesteps}")
-    print("    " + colored(f'{"Epochs":<16}: ', color="blue") + f"{num_epochs}")
-    print("    " + colored(f'{"Device":<16}: ', color="blue") + f"{device}")
-    print()
+    # print(colored("Training", color="blue", attrs=["bold"]))
+    # print(
+    #     "    "
+    #     + colored(f'{"Environments":<16}: ', color="blue")
+    #     + f"{num_environments}"
+    # )
+    # print("    " + colored(f'{"Timesteps":<16}: ', color="blue") + f"{num_timesteps}")
+    # print("    " + colored(f'{"Epochs":<16}: ', color="blue") + f"{num_epochs}")
+    # print("    " + colored(f'{"Device":<16}: ', color="blue") + f"{device}")
+    # print()
 
     bench: Final[PPOBench] = PPOBench(
-        args.model_dir,
-        starting_model_path=args.starting_model_path,
+        model_dir,
+        starting_model_path=starting_model_path,
         features_collector=CNNFeaturesCollector(),
         model_kwargs={
             "verbose": 1,
@@ -159,7 +157,7 @@ def main() -> None:
             # "learning_rate": 0.003,
         },
         policy_kwargs=POLICY_KWARGS,
-        num_environments=args.num_environments,
+        num_environments=num_environments,
         device=device,
     )
 

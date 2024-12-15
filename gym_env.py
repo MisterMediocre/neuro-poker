@@ -6,15 +6,13 @@ import argparse
 from pathlib import Path
 from typing import Final
 
-from termcolor import colored
-
 from neuropoker.extra.torch import get_device
 from neuropoker.game.features import LinearFeaturesCollector
 from neuropoker.ppo_bench import PPOBench
 
 # DEFAULT_STARTING_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb6")
 # DEFAULT_OPPONENT_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb6")
-DEFAULT_MODEL_DIR: Final[Path] = Path("models/3p_3s/sb7/")
+DEFAULT_MODEL_DIR: Final[Path] = Path("models/3p_3s/sb/")
 
 DEFAULT_NUM_ENVIRONMENTS: Final[int] = 8
 DEFAULT_NUM_TIMESTEPS: Final[int] = 100000
@@ -122,40 +120,40 @@ def main() -> None:
     layers: Final[list[int]] = args.layers
     device: Final[str] = get_device() if args.device == "auto" else args.device
 
-    #
-    # Print arguments
-    #
-    print(
-        colored("-------------- gym_env ---------------", color="blue", attrs=["bold"])
-    )
-    print(colored("Models", color="blue", attrs=["bold"]))
-    print(
-        "    "
-        + colored(f'{"Starting model":<14}:', color="blue")
-        + f" {starting_model_path}"
-    )
+    # #
+    # # Print arguments
+    # #
+    # print(
+    #     colored("-------------- gym_env ---------------", color="blue", attrs=["bold"])
+    # )
+    # print(colored("Models", color="blue", attrs=["bold"]))
     # print(
     #     "    "
-    #     + colored(f'{"Opponent model":<14}:', color="blue")
-    #     + f" {opponent_model_path}"
+    #     + colored(f'{"Starting model":<14}:', color="blue")
+    #     + f" {starting_model_path}"
     # )
-    print("    " + colored(f'{"Output models":<14}:', color="blue") + f" {model_dir}")
-    print("    " + colored(f'{"Layers":<14}: ', color="blue") + f"{layers}")
+    # # print(
+    # #     "    "
+    # #     + colored(f'{"Opponent model":<14}:', color="blue")
+    # #     + f" {opponent_model_path}"
+    # # )
+    # print("    " + colored(f'{"Output models":<14}:', color="blue") + f" {model_dir}")
+    # print("    " + colored(f'{"Layers":<14}: ', color="blue") + f"{layers}")
 
-    print(colored("Training", color="blue", attrs=["bold"]))
-    print(
-        "    "
-        + colored(f'{"Environments":<14}: ', color="blue")
-        + f"{num_environments}"
-    )
-    print("    " + colored(f'{"Timesteps":<14}: ', color="blue") + f"{num_timesteps}")
-    print("    " + colored(f'{"Epochs":<14}: ', color="blue") + f"{num_epochs}")
-    print("    " + colored(f'{"Device":<14}: ', color="blue") + f"{device}")
-    print()
+    # print(colored("Training", color="blue", attrs=["bold"]))
+    # print(
+    #     "    "
+    #     + colored(f'{"Environments":<14}: ', color="blue")
+    #     + f"{num_environments}"
+    # )
+    # print("    " + colored(f'{"Timesteps":<14}: ', color="blue") + f"{num_timesteps}")
+    # print("    " + colored(f'{"Epochs":<14}: ', color="blue") + f"{num_epochs}")
+    # print("    " + colored(f'{"Device":<14}: ', color="blue") + f"{device}")
+    # print()
 
     bench: Final[PPOBench] = PPOBench(
-        args.model_dir,
-        starting_model_path=args.starting_model_path,
+        model_dir,
+        starting_model_path=starting_model_path,
         features_collector=LinearFeaturesCollector(),
         model_kwargs={
             "verbose": 1,
@@ -167,14 +165,11 @@ def main() -> None:
         policy_kwargs={
             "net_arch": layers,
         },
-        num_environments=args.num_environments,
+        num_environments=num_environments,
         device=device,
     )
 
-    bench.train(
-        num_epochs=args.num_epochs,
-        num_timesteps=args.num_timesteps,
-    )
+    bench.train(num_epochs=num_epochs, num_timesteps=num_timesteps)
 
 
 if __name__ == "__main__":

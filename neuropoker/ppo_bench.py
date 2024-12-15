@@ -1,5 +1,6 @@
 """Bench for training and evaluating PPO models."""
 
+import json
 from pathlib import Path
 from typing import Any, Dict, Final, List
 
@@ -84,6 +85,7 @@ class PPOBench:
             colored("------------ PPOBench -------------", color="blue", attrs=["bold"])
         )
 
+        # Models
         print(colored("Models", color="blue", attrs=["bold"]))
         print(
             "    "
@@ -95,17 +97,17 @@ class PPOBench:
             + colored(f'{"Output models":<16}:', color="blue")
             + f" {self.output_model_dir}"
         )
-        print(
-            "    "
-            + colored(f'{"Policy kwargs":<16}:', color="blue")
-            + f" {self.policy_kwargs}"
-        )
-        print(
-            "    "
-            + colored(f'{"Model kwargs":<16}:', color="blue")
-            + f" {self.model_kwargs}"
-        )
 
+        # Model kwargs
+        print(colored("Model kwargs", color="blue", attrs=["bold"]))
+        for key, value in self.model_kwargs.items():
+            print("    " + colored(f"{key:<16}:", color="blue") + f" {value}")
+
+        print(colored("Policy kwargs", color="blue", attrs=["bold"]))
+        for key, value in self.policy_kwargs.items():
+            print("    " + colored(f"{key:<16}:", color="blue") + f" {value}")
+
+        # Training
         print(colored("Training", color="blue", attrs=["bold"]))
         print(
             "    "
@@ -143,6 +145,7 @@ class PPOBench:
                 for _ in range(num_environments)
             ]
         )
+        self.starting_epoch = 1
         print()
 
     @staticmethod
@@ -166,12 +169,17 @@ class PPOBench:
             and not Path(model_path).is_dir()
         )
 
-    def _create_trainee(self, policy_type: str = "MlpPolicy", **kwargs) -> PPOPlayer:
+    def _create_trainee(
+        self, policy_type: str = "MlpPolicy", restart: bool = False, **kwargs
+    ) -> PPOPlayer:
         """Create the trainee.
 
         Parameters:
             policy_type: str
                 The type of policy to use.
+            restart: bool
+                If the trainee is already in progress, start from scratch
+                anyway.
             **kwargs
                 Additional arguments to pass to the constructor.
 
@@ -205,22 +213,48 @@ class PPOBench:
         )
 
         #
-        # Load starting model's policy
+        # Try loading existing model's newest policy
         #
-        if self._model_path_exists(self.starting_model_path):
-            print(
-                colored("[PPOBench._create_trainee]", color="blue", attrs=["bold"])
-                + f" Creating trainee from starting model at {self.starting_model_path}"
+        if not restart and self.output_model_dir.is_dir():
+            existing_models: List[Path] = sorted(
+                self.output_model_dir.glob("epoch_*"), reverse=True
             )
-            old_model: Final[PPO] = PPO.load(
+            print(existing_models)
+            if existing_models:
+                print(
+                    colored("Trainee", color="blue", attrs=["bold"])
+                    + f" starting training from model at {existing_models[0]}"
+                )
+                self.starting_epoch = (
+                    int(existing_models[0].name.split(".")[0].split("_")[1]) + 1
+                )
+                old_model: PPO = PPO.load(
+                    existing_models[0],  # type: ignore
+                    env=self.env,
+                )
+                model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
+
+        #
+        # Try loading starting model's policy
+        #
+        elif self._model_path_exists(self.starting_model_path):
+            print(
+                colored("Trainee", color="blue", attrs=["bold"])
+                + f" starting training from model at {self.starting_model_path}"
+            )
+            old_model: PPO = PPO.load(
                 self.starting_model_path,  # type: ignore
                 env=self.env,
             )
             model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
+
+        #
+        # Train from scratch
+        #
         else:
             print(
-                colored("[PPOBench._create_trainee]", color="blue", attrs=["bold"])
-                + " Creating trainee from scratch"
+                colored("Trainee", color="blue", attrs=["bold"])
+                + " starting training from scratch"
             )
 
         #
@@ -250,11 +284,15 @@ class PPOBench:
         #
         if not self._model_path_exists(self.starting_model_path):
             if default is None:
-                raise FileNotFoundError(f"Opponent model not found: {model_path}")
+                raise FileNotFoundError(f"Opponent {uuid} not found: {model_path}")
             else:
                 print(
-                    colored("[PPOBench._create_opponent]", color="blue", attrs=["bold"])
-                    + f" Opponent model not found: {model_path}. Using default player {default}..."
+                    colored(
+                        uuid,
+                        color="blue",
+                        attrs=["bold"],
+                    )
+                    + f" using default model {default}"
                 )
                 return default
 
@@ -262,8 +300,12 @@ class PPOBench:
         # Load the starting model
         #
         print(
-            colored("[PPOBench._create_opponent]", color="blue", attrs=["bold"])
-            + f" Loading opponent {uuid} from {model_path}..."
+            colored(
+                uuid,
+                color="blue",
+                attrs=["bold"],
+            )
+            + f" using PPO model from {model_path}"
         )
         return PPOPlayer.from_model_file(
             self.starting_model_path,  # type: ignore
@@ -284,8 +326,8 @@ class PPOBench:
         output_epoch_model_path: Path = self.output_model_dir / f"epoch_{epoch}"
 
         print(
-            colored("[PPOBench.save_trainee]", color="blue", attrs=["bold"])
-            + f" Saving trainee model to {output_epoch_model_path}..."
+            colored(f"(epoch {epoch})", color="blue")
+            + f" Saving model to {output_epoch_model_path}"
         )
         trainee_player.model.save(output_epoch_model_path)
 
@@ -311,11 +353,7 @@ class PPOBench:
         #
         # Train the model
         #
-        print(
-            colored("[PPOBench._train_epoch]", color="blue", attrs=["bold"])
-            + colored(f" (epoch {epoch})", color="blue")
-            + " Training model..."
-        )
+        print(colored(f"(epoch {epoch})", color="blue") + " Training model...")
         trainee_player.model.learn(
             total_timesteps=num_timesteps, reset_num_timesteps=False
         )
@@ -328,11 +366,7 @@ class PPOBench:
         #
         # Evaluate the model
         #
-        print(
-            colored("[PPOBench._train_epoch]", color="blue", attrs=["bold"])
-            + colored(f" (epoch {epoch})", color="blue")
-            + " Evaluating model..."
-        )
+        print(colored(f"(epoch {epoch})", color="blue") + " Evaluating model...")
 
         players: List[BasePlayer] = [trainee_player, *opponent_players]
         overall_performance: PlayerStats = default_player_stats()
@@ -355,15 +389,35 @@ class PPOBench:
             overall_performance["winnings"] / overall_performance["num_games"]
         )
         print(
-            colored("[PPOBench._train_epoch]", color="blue", attrs=["bold"])
-            + colored(f" (epoch {epoch})", color="blue")
+            colored(f"(epoch {epoch})", color="blue")
             + f" Average winnings: {average_winnings}"
         )
         print(
-            colored("[PPOBench._train_epoch]", color="blue", attrs=["bold"])
-            + colored(f" (epoch {epoch})", color="blue")
+            colored(f"(epoch {epoch})", color="blue")
             + f" Overall performance: {overall_performance}"
         )
+
+        #
+        # Save evaluation results
+        #
+        eval_json_path: Final[Path] = self.output_model_dir / "eval.json"
+        eval_data: Dict[str, Any] = {}
+
+        if eval_json_path.exists():
+            with eval_json_path.open("r") as f:
+                eval_data = json.load(f)
+
+        eval_data[f"epoch_{epoch}"] = {
+            "average_winnings": average_winnings,
+            "performance": overall_performance,
+        }
+
+        print(
+            colored(f"(epoch {epoch})", color="blue")
+            + f" Saving evaluation results to {eval_json_path}"
+        )
+        with eval_json_path.open("w") as f:
+            json.dump(eval_data, f)
 
     def train(self, num_epochs: int = 100, num_timesteps: int = 100000) -> None:
         """Train the PPO model against the baseline opponents.
@@ -405,7 +459,7 @@ class PPOBench:
         #
         # Train the trainee player
         #
-        for epoch in range(num_epochs):
+        for epoch in range(self.starting_epoch, num_epochs + 1):
             print()
             print(
                 colored(
