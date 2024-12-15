@@ -165,7 +165,8 @@ class PokerEnv(gymnasium.Env):
         extracted_features: np.ndarray = self.feature_collector(
             hole_card, round_state, "me"
         )
-        extracted_features = extracted_features[np.newaxis, :]
+        # extracted_features = extracted_features[np.newaxis, :]
+        # print(extracted_features.shape)
         return extracted_features, {}
 
     @override
@@ -212,9 +213,9 @@ class PokerEnv(gymnasium.Env):
         self.keep_playing(break_me=True)
 
         round_state = DataEncoder.encode_round_state(self.game_state)
-        extracted_features = self.feature_collector(hole_card, round_state, "me")[
-            np.newaxis, :
-        ]
+        extracted_features = self.feature_collector(hole_card, round_state, "me")
+        # extracted_features = extracted_features[np.newaxis, :]
+        # print(extracted_features.shape)
 
         if self.game_state["street"] == Const.Street.FINISHED:
             stack: float = self.game_state["table"].seats.players[self.player_pos].stack
@@ -317,15 +318,14 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
             y: torch.Tensor
                 The output tensor.
         """
-        x = x.squeeze(dim=0)
         # print(f"x: {x.shape}")
 
         # Input x -> Hidden representation h
-        h: Final[torch.Tensor] = self.cnn(x)
+        h: torch.Tensor = self.cnn(x)
         # print(f"h: {h.shape}")
 
         # Hidden representation h -> Output y
-        y: Final[torch.Tensor] = self.fc(h)
+        y: torch.Tensor = self.fc(h)
         # print(f"y: {y.shape}")
         return y
 

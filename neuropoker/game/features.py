@@ -108,7 +108,7 @@ class LinearFeaturesCollector(FeaturesCollector):
             Number of players
         """
         super().__init__(
-            shape=(1, 73),
+            shape=(73,),
             low=0.0,
             high=1.0,
         )
