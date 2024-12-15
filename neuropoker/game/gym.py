@@ -13,9 +13,10 @@ from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.engine.poker_constants import PokerConstants as Const
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from neuropoker.game.cards import get_card_list
+from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game.features import FeaturesCollector, LinearFeaturesCollector
 from neuropoker.game.game import Game, GameState
-from neuropoker.game.utils import SHORT_RANKS, SHORTER_SUITS, STACK, extract_features
+from neuropoker.game.utils import STACK
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.ppo import PPOPlayer
 from neuropoker.players.utils import load_ppo_player
@@ -27,29 +28,35 @@ class PokerEnv(gymnasium.Env):
     """Class for modeling a poker game in a Gym environment."""
 
     def __init__(
-        self, game: Game, reset_threshold: int = DEFAULT_RESET_THRESHOLD
+        self,
+        game: Game,
+        feature_collector: FeaturesCollector | None = None,
+        reset_threshold: int = DEFAULT_RESET_THRESHOLD,
     ) -> None:
         """Initialize the poker gym environment.
 
         Parameters:
             game: Game
                 The underlying poker game.
+            feature_collector: FeaturesCollector | None
+                The feature extractor to use.
+            reset_threshold: int
+                The number of games after which to reset the environment.
         """
-        num_features: Final[int] = 73
-
-        # Gym options
-        self.observation_space: spaces.Space = spaces.Box(
-            low=0, high=3, shape=(1, num_features), dtype=np.float32
-        )
-        self.action_space: spaces.Space = spaces.Discrete(5)
-
         # Game
         self.game: Game = game
         self.reset_threshold: Final[int] = reset_threshold
 
-        random.seed(time.time())
-        self.seed: Final[int] = random.randint(0, 10000)
-        print("SEED:", self.seed)
+        # Feature extractor
+        self.feature_collector: Final[FeaturesCollector] = (
+            feature_collector
+            if feature_collector is not None
+            else LinearFeaturesCollector()
+        )
+
+        # Gym options
+        self.action_space: spaces.Space = spaces.Discrete(5)
+        self.observation_space: spaces.Space = self.feature_collector.space()
 
         # Stats
         self.game_state: GameState = {}
@@ -59,6 +66,12 @@ class PokerEnv(gymnasium.Env):
         self.cumulative_reward: float = 0
         self.statistics: Dict[Tuple[str, str], Any] = {}
 
+        # Seed
+        random.seed(time.time())
+        self.seed: Final[int] = random.randint(0, 10000)
+        print("SEED:", self.seed)
+
+        # Reset
         self.reset()
 
     def keep_playing(self, break_me: bool) -> None:
@@ -149,7 +162,9 @@ class PokerEnv(gymnasium.Env):
         )
         hole_card: Final[List[str]] = encoded_player["hole_card"]
 
-        extracted_features: np.ndarray = extract_features(hole_card, round_state, "me")
+        extracted_features: np.ndarray = self.feature_collector(
+            hole_card, round_state, "me"
+        )
         extracted_features = extracted_features[np.newaxis, :]
         return extracted_features, {}
 
@@ -197,7 +212,7 @@ class PokerEnv(gymnasium.Env):
         self.keep_playing(break_me=True)
 
         round_state = DataEncoder.encode_round_state(self.game_state)
-        extracted_features = extract_features(hole_card, round_state, "me")[
+        extracted_features = self.feature_collector(hole_card, round_state, "me")[
             np.newaxis, :
         ]
 
@@ -256,7 +271,7 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
             observation_space: gym.spaces.Space
                 The observation space.
             features_dim: int
-                The size of the feature vector.
+                The size of the generated feature vector.
         """
         super().__init__(observation_space, features_dim)
 
@@ -281,7 +296,8 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
         # Compute the size of the output after CNN layers
         with torch.no_grad():
             sample_input = torch.zeros((1,) + observation_space.shape)
-            n_flatten = self.cnn(sample_input).shape[1]
+            sample_output = self.cnn(sample_input)
+            n_flatten = sample_output.shape[1]
 
         # Fully connected layer to produce feature vector
         self.fc = torch.nn.Sequential(
@@ -290,24 +306,34 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
         )
 
     @override
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Make a forward pass through the network.
 
         Parameters:
-            observations: torch.Tensor
+            x: torch.Tensor
                 The input tensor.
 
         Returns:
-            output: torch.Tensor
+            y: torch.Tensor
                 The output tensor.
         """
-        x: torch.Tensor = self.cnn(observations)
-        return self.fc(x)
+        x = x.squeeze(dim=0)
+        # print(f"x: {x.shape}")
+
+        # Input x -> Hidden representation h
+        h: Final[torch.Tensor] = self.cnn(x)
+        # print(f"h: {h.shape}")
+
+        # Hidden representation h -> Output y
+        y: Final[torch.Tensor] = self.fc(h)
+        # print(f"y: {y.shape}")
+        return y
 
 
 def make_env(
     starting_model_path: str | Path | None = None,
     opponent_model_path: str | Path | None = None,
+    feature_collector: FeaturesCollector | None = None,
     reset_threshold: int = DEFAULT_RESET_THRESHOLD,
     suits: List[str] | None = None,
     ranks: List[str] | None = None,
@@ -319,6 +345,8 @@ def make_env(
             The path to the starting model file to use.
         opponent_model_path: str | Path | None
             The path to the opponent model file to use.
+        feature_collector: FeaturesCollector | None
+            The feature extractor to use.
         reset_threshold: int
             The number of games after which to reset the environment.
         suits: List[str] | None
@@ -342,5 +370,6 @@ def make_env(
             ],
             get_card_list(suits_, ranks_),
         ),
+        feature_collector=feature_collector,
         reset_threshold=reset_threshold,
     )

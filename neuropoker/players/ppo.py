@@ -6,14 +6,19 @@ from typing import Final, Tuple
 import numpy as np
 from stable_baselines3.ppo.ppo import PPO
 
-from neuropoker.game.utils import extract_features
+from neuropoker.game.features import FeaturesCollector, LinearFeaturesCollector
 from neuropoker.players.base import BasePlayer
 
 
 class PPOPlayer(BasePlayer):
     """A player which uses a PPO model to make decisions."""
 
-    def __init__(self, model: PPO, uuid: str) -> None:
+    def __init__(
+        self,
+        model: PPO,
+        uuid: str,
+        feature_collector: FeaturesCollector | None = None,
+    ) -> None:
         """Initialize the player.
 
         Parameters:
@@ -24,6 +29,11 @@ class PPOPlayer(BasePlayer):
         """
         super().__init__(uuid)
         self.model: Final[PPO] = model
+        self.feature_collector: Final[FeaturesCollector] = (
+            feature_collector
+            if feature_collector is not None
+            else LinearFeaturesCollector()
+        )
 
     @staticmethod
     def from_model_file(model_file: Path | str, uuid: str) -> "PPOPlayer":
@@ -90,13 +100,16 @@ class PPOPlayer(BasePlayer):
             amount: int
                 The amount to bet or raise.
         """
-        features: Final[np.ndarray] = extract_features(
+        # features: Final[np.ndarray] = extract_features(
+        #     hole_card, round_state, self.uuid
+        # )
+        features: Final[np.ndarray] = self.feature_collector(
             hole_card, round_state, self.uuid
         )
 
         # TODO: Fix type error
-        action: Final[int] = self.model.predict(features[np.newaxis, :])[0]  # type: ignore
-
+        action: Final[int] = self.model.predict(features)[0]  # type: ignore
         action_: Final[Tuple[str, int]] = self.int_to_action(action, valid_actions)
+
         self.report_action(action_, hole_card, round_state)
         return action_

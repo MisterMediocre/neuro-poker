@@ -13,6 +13,7 @@ from termcolor import colored
 
 from neuropoker.extra.torch import get_device
 from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game.features import CNNFeaturesCollector
 from neuropoker.game.game import Game, PlayerStats, default_player_stats, merge
 from neuropoker.game.gym import PokerCNNExtractor, make_env
 from neuropoker.players.base import BasePlayer
@@ -160,7 +161,7 @@ def load_trainee_player(
                 + " Starting training from scratch"
             )
 
-    return PPOPlayer(model, "me")
+    return PPOPlayer(model, "me", feature_collector=CNNFeaturesCollector())
 
 
 def load_opponent_players(
@@ -251,6 +252,7 @@ def main() -> None:
             make_env(
                 starting_model_path=starting_model_path,
                 opponent_model_path=opponent_model_path,
+                feature_collector=CNNFeaturesCollector(),
                 reset_threshold=30000,
                 suits=SHORTER_SUITS,
                 ranks=SHORT_RANKS,

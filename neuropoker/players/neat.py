@@ -5,7 +5,7 @@ from typing import Final, Optional, Tuple, Union
 import numpy as np
 from neat.nn import FeedForwardNetwork, RecurrentNetwork
 
-from neuropoker.game.utils import extract_features
+from neuropoker.game.features import FeaturesCollector, LinearFeaturesCollector
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import RandomPlayer
 
@@ -20,6 +20,7 @@ class NEATPlayer(BasePlayer):
         uuid: str,
         net: NEATNetwork,
         training: bool = False,
+        feature_collector: FeaturesCollector | None = None,
     ) -> None:
         """Initialize the model.
 
@@ -35,6 +36,11 @@ class NEATPlayer(BasePlayer):
 
         self.net: Final[NEATNetwork] = net
         self.training: Final[bool] = training
+        self.feature_collector: Final[FeaturesCollector] = (
+            feature_collector
+            if feature_collector is not None
+            else LinearFeaturesCollector()
+        )
 
         # Helps bootstrap the model by ensuring it sees a variety of
         # situations.
@@ -80,7 +86,7 @@ class NEATPlayer(BasePlayer):
 
         # print(hole_card)
         # print(round_state["community_card"])
-        features = extract_features(hole_card, round_state, self.uuid)
+        features = self.feature_collector(hole_card, round_state, self.uuid)
         output = self.net.activate(features)  # Neural network output
         chosen_action_idx = np.argmax(output)
 
