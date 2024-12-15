@@ -46,9 +46,9 @@ class FeaturesCollector(ABC):
             dtype: np.dtype
                 The data type of the observation space values.
         """
-        self.shape: Tuple[int, ...] = shape
-        self.low: float = low
-        self.high: float = high
+        self.shape: Final[Tuple[int, ...]] = shape
+        self.low: Final[float] = low
+        self.high: Final[float] = high
         self.dtype: Final[np.dtype] = dtype
 
     def space(self) -> gymnasium.spaces.Space:
@@ -108,7 +108,10 @@ class LinearFeaturesCollector(FeaturesCollector):
             Number of players
         """
         super().__init__(
-            shape=(73,),
+            shape=(
+                1,
+                73,
+            ),
             low=0.0,
             high=1.0,
         )
@@ -189,7 +192,10 @@ class LinearFeaturesCollector(FeaturesCollector):
                         player_bets[street_name][relative_pos] += normalized_bet_amount
 
         # Self-state is redundant, but included for consistency
-        player_states: List[int] = [STATE_MAPPING[p["state"]] for p in rotated_seats]
+        player_states: List[float] = [
+            STATE_MAPPING[p["state"]] / max(STATE_MAPPING.values())
+            for p in rotated_seats
+        ]
 
         flattened_bets: np.ndarray = np.concatenate(
             [player_bets[street] for street in ["preflop", "flop", "turn", "river"]]
@@ -210,6 +216,7 @@ class LinearFeaturesCollector(FeaturesCollector):
                 [normalized_position],
             ]
         )
+        features = features.reshape(1, -1)
 
         if features.shape != self.shape:
             raise ValueError(

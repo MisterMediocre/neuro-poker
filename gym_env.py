@@ -13,6 +13,7 @@ from termcolor import colored
 
 from neuropoker.extra.torch import get_device
 from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
+from neuropoker.game.features import FeaturesCollector, LinearFeaturesCollector
 from neuropoker.game.game import Game, PlayerStats, default_player_stats, merge
 from neuropoker.game.gym import make_env
 from neuropoker.players.base import BasePlayer
@@ -118,6 +119,7 @@ def load_trainee_player(
     env: gymnasium.Env | VecEnv,
     layers: List[int],
     model_path: str | Path | None = None,
+    feature_collector: FeaturesCollector | None = None,
     device: str = "auto",
     verbose: bool = False,
 ) -> PPOPlayer:
@@ -128,6 +130,8 @@ def load_trainee_player(
             The environment to train in.
         layers: List[int]
             The number of nodes in each layer of the neural network.
+        feature_collector: FeaturesCollector | None
+            The feature collector to use.
         model_path: str | Path | None
             The path to the model file, if not training from scratch.
         device: str
@@ -170,12 +174,13 @@ def load_trainee_player(
                 + " Starting training from scratch"
             )
 
-    return PPOPlayer(model, "me")
+    return PPOPlayer(model, "me", feature_collector=feature_collector)
 
 
 def load_opponent_players(
     model_file: str | Path | None = None,
     num_opponents: int = 2,
+    feature_collector: FeaturesCollector | None = None,
     verbose: bool = False,
 ) -> List[PPOPlayer | CallPlayer]:
     """Load opponents.
@@ -185,6 +190,8 @@ def load_opponent_players(
             The path to the model file, if not comparing against a Call baseline.
         num_opponents: int
             The number of opponents to load.
+        feature_collector: FeaturesCollector | None
+            The feature collector to use.
         verbose: bool
             Whether to print verbose output.
 
@@ -196,7 +203,10 @@ def load_opponent_players(
 
     for i in range(num_opponents):
         opponent_player: PPOPlayer | CallPlayer = load_ppo_player(
-            model_file, f"opponent{i}", verbose=verbose
+            model_file,
+            f"opponent{i}",
+            feature_collector=feature_collector,
+            verbose=verbose,
         )
         opponent_players.append(opponent_player)
 
@@ -261,11 +271,13 @@ def main() -> None:
         )
     )
 
-    env = SubprocVecEnv(
+    feature_collector: Final[FeaturesCollector] = LinearFeaturesCollector()
+    env: Final[VecEnv] = SubprocVecEnv(
         [
             make_env(
                 starting_model_path=starting_model_path,
                 opponent_model_path=opponent_model_path,
+                feature_collector=feature_collector,
                 reset_threshold=30000,
                 suits=SHORTER_SUITS,
                 ranks=SHORT_RANKS,
@@ -279,14 +291,20 @@ def main() -> None:
     # Load the trainee player
     #
     trainee_player: Final[PPOPlayer] = load_trainee_player(
-        env, layers, model_path=starting_model_path, device=device
+        env,
+        layers,
+        model_path=starting_model_path,
+        feature_collector=feature_collector,
+        device=device,
     )
 
     #
     # Load the opponent players
     #
     opponent_players: Final[List[PPOPlayer | CallPlayer]] = load_opponent_players(
-        opponent_model_path, 2
+        opponent_model_path,
+        2,
+        feature_collector=feature_collector,
     )
 
     #
@@ -344,7 +362,9 @@ def main() -> None:
         # Evaluate the model
         #
         print(colored(f"[epoch {epoch:>4}]", "blue") + " Evaluating model...")
-        p1: PPOPlayer | CallPlayer = load_ppo_player(epoch_model_path, "me")
+        p1: PPOPlayer | CallPlayer = load_ppo_player(
+            epoch_model_path, "me", feature_collector=feature_collector
+        )
         if not isinstance(p1, PPOPlayer):
             raise ValueError("Player 1 is not a PPOPlayer")
 

@@ -7,6 +7,7 @@ from typing import Dict, Final, Type
 from stable_baselines3.ppo.ppo import PPO
 from termcolor import colored
 
+from neuropoker.game.features import FeaturesCollector
 from neuropoker.models.base import BaseModel
 from neuropoker.models.neat.neat import NEATModel
 from neuropoker.models.utils import load_model
@@ -65,7 +66,7 @@ class PlayerDefinition:
 
             # Load the model
             player_model: Final[NEATModel] = load_model(
-                self.model_type, self.model_file
+                self.model_type, Path(self.model_file)
             )
 
             # Create the player with a NEATModel
@@ -99,7 +100,10 @@ def player_type_from_string(player_type_str: str) -> Type[BasePlayer]:
 
 
 def load_ppo_player(
-    model_path: str | Path | None, uuid: str, verbose: bool = False
+    model_path: str | Path | None,
+    uuid: str,
+    feature_collector: FeaturesCollector | None = None,
+    verbose: bool = False,
 ) -> PPOPlayer | CallPlayer:
     """Attempt to load a PPO player player from a PPO model file.
 
@@ -108,6 +112,8 @@ def load_ppo_player(
             The path to the model file.
         uuid: str
             The UUID of the player.
+        feature_collector: FeaturesCollector | None
+            The feature collector to use.
         verbose: bool
             Whether to print verbose messages.
 
@@ -126,7 +132,7 @@ def load_ppo_player(
                 + f" Model path {model_path} found, returning PPOPlayer"
             )
         model = PPO.load(model_path)
-        return PPOPlayer(model, uuid)
+        return PPOPlayer(model, uuid, feature_collector=feature_collector)
 
     if verbose:
         print(
