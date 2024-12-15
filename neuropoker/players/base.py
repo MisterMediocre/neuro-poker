@@ -1,6 +1,6 @@
 """Base class for poker players."""
 
-from typing import Final, TypeVar
+from typing import Final, Tuple, TypeVar
 
 from pypokerengine.players import BasePokerPlayer
 
@@ -10,15 +10,15 @@ PlayerT = TypeVar("PlayerT", bound="BasePlayer")
 class BasePlayer(BasePokerPlayer):
     """Base class for poker players."""
 
-    def __init__(self, uuid: str | None = None):
+    def __init__(self, uuid: str):
         """Initialize the player.
 
         Parameters:
-            uuid: str | None
+            uuid: str
                 The uuid of this player.
         """
         self.dealer_action = {}
-        self.uuid: Final[str | None] = uuid
+        self.uuid: Final[str] = uuid
         super(BasePlayer, self).__init__()
 
     def report_action(self, action, hole_card, round_state):
@@ -36,7 +36,7 @@ class BasePlayer(BasePokerPlayer):
         self.dealer_action[rep] = self.dealer_action.get(rep, {})
         self.dealer_action[rep][action[0]] = self.dealer_action[rep].get(action, 0) + 1
 
-    def declare_action(self, valid_actions, hole_card, round_state):
+    def declare_action(self, valid_actions, hole_card, round_state) -> Tuple[str, int]:
         """Select an action.
 
         Parameters:
@@ -53,6 +53,7 @@ class BasePlayer(BasePokerPlayer):
             amount: int
                 The amount to bet or raise.
         """
+        raise NotImplementedError
 
     def receive_game_start_message(self, game_info):
         pass

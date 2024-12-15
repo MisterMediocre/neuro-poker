@@ -240,8 +240,8 @@ class Game:
 
         self.players: Final[List[BasePlayer]] = players
         self.players_info: Final[Dict[str, Dict[str, Any]]] = {
-            model.uuid: {"name": model.uuid, "stack": stack, "uuid": model.uuid}
-            for model in self.players
+            player.uuid: {"name": player.uuid, "stack": stack, "uuid": player.uuid}
+            for player in self.players
         }
 
         # Check that all players have unique UUIDs

@@ -1,30 +1,46 @@
+#!/usr/bin/env python3
+
 import random
 import time
-from typing import List
+from pathlib import Path
+from typing import Any, Callable, Dict, Final, List, Tuple, override
 
+import gymnasium as gym
+import numpy as np
+import torch
+from gymnasium import spaces
 from pypokerengine.api.emulator import Emulator
 from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.engine.poker_constants import PokerConstants as Const
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.ppo.ppo import PPO
 
-from neuropoker.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
-from neuropoker.game import (
+from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list, get_deck
+from neuropoker.game.game import (
     SMALL_BLIND_AMOUNT,
+    Game,
     default_player_stats,
-    evaluate_performance,
-    get_deck,
+    # evaluate_performance,
     merge,
 )
-from neuropoker.game.cards import SHORT_RANKS, SHORTER_SUITS, get_card_list
-from neuropoker.game.game import SMALL_BLIND_AMOUNT, get_deck
 from neuropoker.game.utils import NUM_PLAYERS, STACK, extract_features
-from neuropoker.game_utils import NUM_PLAYERS, STACK, extract_features
 from neuropoker.players.base import BasePlayer
 from neuropoker.players.naive import CallPlayer
 
 
 def int_to_action(i, valid_actions):
+    """Convert an integer action to a poker action.
+
+    Parameters:
+        i: int
+            The integer action.
+        valid_actions: List[Dict[str, Any]]
+            The valid actions for the player.
+
+    Returns:
+        action: Tuple[str, int]
+            The poker action.
+    """
     if i == 0:
         return "fold", 0
     elif i == 1:
@@ -37,23 +53,36 @@ def int_to_action(i, valid_actions):
         raise ValueError("Invalid action")
 
 
-def load_model_player(model_path, uuid):
-    if model_path == "call":
-        return CallPlayer()
+def load_model_player(model_path: str | Path, uuid: str):
+    """Load a ModelPlayer from a file.
+
+    Parameters:
+        model_path: str | Path
+            The path to the model file.
+        uuid: str
+            The UUID of the player.
+
+    Returns:
+        player: ModelPlayer
+            The loaded player.
+    """
+    if not Path(model_path).exists() or model_path == "call":
+        return CallPlayer(uuid)
 
     model = PPO.load(model_path)
     return ModelPlayer(model, uuid)
 
 
 class ModelPlayer(BasePlayer):
-    def __init__(self, model, uuid):
-        super().__init__()
+    """A poker player which uses a PPO model."""
+
+    def __init__(self, model, uuid: str):
+        super().__init__(uuid=uuid)
         self.dealer_fold = {}
         self.dealer_call = {}
         self.dealer_raise = {}
         self.dealer_cards = {}
         self.model = model
-        self.uuid = uuid
 
     def declare_action(self, valid_actions, hole_card, round_state):
         features = extract_features(hole_card, round_state, self.uuid)
@@ -65,22 +94,30 @@ class ModelPlayer(BasePlayer):
 
 
 class PokerEnv(gym.Env):
-    def __init__(self, old_paths: List[str]):
+    """A gym environment for poker."""
+
+    def __init__(self, old_paths: List[str | Path]) -> None:
+        """Initialize the environment.
+
+        Parameters:
+            old_paths: List[str | Path]
+                Paths to the old models.
+        """
         num_features = 73
-        self.observation_space = spaces.Box(
+        self.observation_space: spaces.Space = spaces.Box(
             low=0, high=3, shape=(1, num_features), dtype=np.float32
         )
-        self.action_space = spaces.Discrete(5)
+        self.action_space: spaces.Space = spaces.Discrete(5)
 
-        self.old_paths = old_paths
+        self.old_paths: Final[List[str | Path]] = old_paths
 
-        self.num_games = 0
-        self.bad_games = 0
-        self.total_reward = 0
-        self.cumulative_reward = 0
+        self.num_games: int = 0
+        self.bad_games: int = 0
+        self.total_reward: float = 0
+        self.cumulative_reward: float = 0
         self.statistics = {}
 
-        self.emulator = Emulator()
+        self.emulator: Final[Emulator] = Emulator()
         self.emulator.set_game_rule(
             NUM_PLAYERS,
             STACK,
@@ -89,21 +126,30 @@ class PokerEnv(gym.Env):
         )
 
         random.seed(time.time())
-        self.seed = random.randint(0, 10000)
+        self.seed: Final[int] = random.randint(0, 10000)
         print("SEED:", self.seed)
 
-        self.set_players()
+        self.opponent_path: Final[str | Path] = random.choice(self.old_paths)
+        # self.opponent1_path: Final[str | PathL] = random.choice(self.old_paths)
+        self.opponent1: Final[BasePlayer] = load_model_player(
+            self.opponent_path, "opponent1"
+        )
+        self.opponent2: Final[BasePlayer] = load_model_player(
+            self.opponent_path, "opponent2"
+        )
+
         self.cards = get_card_list(SHORTER_SUITS, SHORT_RANKS)
+        self.game_state = {}
 
         self.reset()
 
-    def set_players(self):
-        self.opponent_path = random.choice(self.old_paths)
-        self.opponent1_path = random.choice(self.old_paths)
-        self.opponent1 = load_model_player(self.opponent_path, "opponent1")
-        self.opponent2 = load_model_player(self.opponent_path, "opponent2")
+    def keep_playing(self, break_me) -> None:
+        """TODO: Docstring
 
-    def keep_playing(self, break_me):
+        Parameters:
+            break_me: bool
+                Whether our player should break when it's their turn.
+        """
         game_state = self.game_state
         while game_state["street"] != Const.Street.FINISHED:
             next_player = game_state["next_player"]
@@ -124,7 +170,20 @@ class PokerEnv(gym.Env):
 
         self.game_state = game_state
 
-    def reset(self, **kwargs):
+    @override
+    def reset(self, **kwargs) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Reset the environment.
+
+        Parameters:
+            **kwargs
+                Unused
+
+        Returns:
+            extracted_features: np.ndarray
+                The extracted features.
+            info: Dict[str, Any]
+                Additional information.
+        """
         self.num_games += 1
 
         dealer = 1
@@ -140,7 +199,11 @@ class PokerEnv(gym.Env):
         self.player_names[(self.player_pos + 1) % 3] = "opponent1"
         self.player_names[(self.player_pos + 2) % 3] = "opponent2"
 
-        self.players = [BasePlayer(), BasePlayer(), BasePlayer()]
+        self.players = [
+            BasePlayer("player"),
+            BasePlayer("player1"),
+            BasePlayer("player2"),
+        ]
         self.players[(self.player_pos + 1) % 3] = self.opponent1
         self.players[(self.player_pos + 2) % 3] = self.opponent2
 
@@ -172,7 +235,26 @@ class PokerEnv(gym.Env):
         extracted_features = extracted_features[np.newaxis, :]
         return extracted_features, {}
 
-    def step(self, action):
+    @override
+    def step(self, action) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """Take a single step within the environment.
+
+        Parameters:
+            action: int
+                The action chosen by the agent.
+
+        Returns:
+            extracted_features: np.ndarray
+                The extracted features.
+            reward: float
+                The reward for the action.
+            done: bool
+                Whether the episode is done.
+            truncated: bool
+                Whether the episode was truncated.
+            info: Dict[str, Any]
+                Additional information.
+        """
         game_state = self.game_state
         hole_card = DataEncoder.encode_player(
             self.game_state["table"].seats.players[self.player_pos], holecard=True
@@ -230,26 +312,49 @@ class PokerEnv(gym.Env):
         return extracted_features, 0, False, False, {}
 
 
-FIRST_MODEL_PATH = "models/3p_3s/sb2"
-SECOND_MODEL_PATH = "models/3p_3s/sb3"
-THIRD_MODEL_PATH = "models/3p_3s/sb4"
-FOURTH_MODEL_PATH = "models/3p_3s/sb5"
-CURRENT_MODEL_PATH = "models/3p_3s/sb6"
-CURRENT_MODEL_PATH_BACKUP = "models/3p_3s/sb6_backup"
-STATS_FILE = "sb6_stats.txt"
+FIRST_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb2")
+SECOND_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb3")
+THIRD_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb4")
+FOURTH_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb5")
+CURRENT_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb6")
+CURRENT_MODEL_PATH_BACKUP: Final[Path] = Path("models/3p_3s/sb6_backup")
+STATS_FILE: Final[Path] = Path("sb6_stats.txt")
 
-NUM_ENVIRONMENTS = 16
-NET_ARCH = [128, 128]
+NUM_ENVIRONMENTS: Final[int] = 16
+NET_ARCH: Final[List[int]] = [128, 128]
 
 
-def make_env():
+def make_env() -> Callable[[], PokerEnv]:
+    """Create a poker environment.
+
+    Returns:
+        env: () -> PokerEnv
+            A function that creates a poker environment.
+    """
     return lambda: PokerEnv([CURRENT_MODEL_PATH])
 
 
-if __name__ == "__main__":
+def get_device() -> str:
+    """Get the device to train on.
+
+    Returns:
+        device: str
+            The device to train on.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
+
+
+def main() -> None:
+    """Run the script."""
     # print("MPS available:", torch.backends.mps.is_available())
     # device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     # print(f"Training on: {device}")
+    device: Final[str] = get_device()
 
     env = SubprocVecEnv([make_env() for _ in range(NUM_ENVIRONMENTS)])
     model = PPO(
@@ -261,10 +366,11 @@ if __name__ == "__main__":
         n_steps=512,
         learning_rate=0.0001,
         policy_kwargs=dict(net_arch=NET_ARCH),
+        device=torch.device(device),
     )
 
-    old_model = PPO.load(CURRENT_MODEL_PATH, env=env)
-    model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
+    # old_model = PPO.load(CURRENT_MODEL_PATH, env=env)
+    # model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
 
     # Statically load opponents as the original model
     p2 = load_model_player(CURRENT_MODEL_PATH, "opponent1")
@@ -285,10 +391,11 @@ if __name__ == "__main__":
         overall_performance["uuid"] = "me"
 
         for i in range(0, 3):
-            player_names_i = player_names[i:] + player_names[:i]
-            players_i = players[i:] + players[:i]
+            player_names_: List[str] = player_names[i:] + player_names[:i]
+            players_: List[BasePlayer] = players[i:] + players[:i]
 
-            performances = evaluate_performance(player_names_i, players_i, 2000, -1)
+            game = Game(players_, get_card_list(SHORTER_SUITS, SHORT_RANKS))
+            performances = game.play_multiple(num_games=2000, seed=-1)
             overall_performance = merge(overall_performance, performances["me"])
 
         print("Overall performance:")
@@ -297,3 +404,7 @@ if __name__ == "__main__":
             overall_performance["winnings"] / overall_performance["num_games"],
         )
         print(overall_performance)
+
+
+if __name__ == "__main__":
+    main()
