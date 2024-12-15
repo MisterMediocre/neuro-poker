@@ -1,5 +1,6 @@
 """Class for Stable Baselines 3 PPO-based poker players."""
 
+from pathlib import Path
 from typing import Final, Tuple
 
 import numpy as np
@@ -23,6 +24,23 @@ class PPOPlayer(BasePlayer):
         """
         super().__init__(uuid)
         self.model: Final[PPO] = model
+
+    @staticmethod
+    def from_model_file(model_file: Path | str, uuid: str) -> "PPOPlayer":
+        """Load a model from a file.
+
+        Parameters:
+            model_file: Path | str
+                The path to the model file.
+            uuid: str
+                The uuid of this player
+
+        Returns:
+            player: PPOPlayer
+                The loaded player.
+        """
+        model: Final[PPO] = PPO.load(model_file)
+        return PPOPlayer(model, uuid)
 
     @staticmethod
     def int_to_action(output: int, valid_actions) -> Tuple[str, int]:
@@ -79,4 +97,6 @@ class PPOPlayer(BasePlayer):
         # TODO: Fix type error
         action: Final[int] = self.model.predict(features[np.newaxis, :])[0]  # type: ignore
 
-        return self.int_to_action(action, valid_actions)
+        action_: Final[Tuple[str, int]] = self.int_to_action(action, valid_actions)
+        self.report_action(action_, hole_card, round_state)
+        return action_
