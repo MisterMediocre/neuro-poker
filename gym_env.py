@@ -22,7 +22,7 @@ from neuropoker.players.utils import load_ppo_player
 
 DEFAULT_MODEL_FILE: Final[Path] = Path("models/3p_3s/sb6")
 DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
-DEFAULT_NUM_ENVIRONMENTS: Final[int] = 16
+DEFAULT_NUM_ENVIRONMENTS: Final[int] = 8
 DEFAULT_NUM_TIMESTEPS: Final[int] = 100000
 DEFAULT_LAYERS: Final[list[int]] = [128, 128]
 
