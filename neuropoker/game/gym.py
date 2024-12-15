@@ -306,7 +306,8 @@ class PokerCNNExtractor(BaseFeaturesExtractor):
 
 
 def make_env(
-    model_path: str | Path | None = None,
+    starting_model_path: str | Path | None = None,
+    opponent_model_path: str | Path | None = None,
     reset_threshold: int = DEFAULT_RESET_THRESHOLD,
     suits: List[str] | None = None,
     ranks: List[str] | None = None,
@@ -314,8 +315,10 @@ def make_env(
     """Create a poker environment.
 
     Parameters:
-        model_file: str | Path | None
-            The path to the model file to use.
+        starting_model_path_file: str | Path | None
+            The path to the starting model file to use.
+        opponent_model_path: str | Path | None
+            The path to the opponent model file to use.
         reset_threshold: int
             The number of games after which to reset the environment.
         suits: List[str] | None
@@ -333,9 +336,9 @@ def make_env(
     return lambda: PokerEnv(
         Game(
             [
-                load_ppo_player(model_path, "me"),
-                load_ppo_player(model_path, "opponent1"),
-                load_ppo_player(model_path, "opponent2"),
+                load_ppo_player(starting_model_path, "me"),
+                load_ppo_player(opponent_model_path, "opponent1"),
+                load_ppo_player(opponent_model_path, "opponent2"),
             ],
             get_card_list(suits_, ranks_),
         ),

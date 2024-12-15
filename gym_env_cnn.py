@@ -20,10 +20,13 @@ from neuropoker.players.naive import CallPlayer
 from neuropoker.players.ppo import PPOPlayer
 from neuropoker.players.utils import load_ppo_player
 
-DEFAULT_MODEL_FILE: Final[Path] = Path("models/3p_3s/sb_cnn")
-DEFAULT_CONFIG_FILE: Final[Path] = Path("configs/3p_3s_neat.toml")
+DEFAULT_STARTING_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb_cnn")
+DEFAULT_OPPONENT_MODEL_PATH: Final[Path] = Path("models/3p_3s/sb_cnn")
+DEFAULT_MODEL_DIR: Final[Path] = Path("models/3p_3s/sb_cnn/")
+
 DEFAULT_NUM_ENVIRONMENTS: Final[int] = 8
 DEFAULT_NUM_TIMESTEPS: Final[int] = 100000
+DEFAULT_NUM_EPOCHS: Final[int] = 100
 
 POLICY_KWARGS: Final[Dict[str, Any]] = {
     "features_extractor_class": PokerCNNExtractor,
@@ -37,25 +40,34 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a PPO agent to play poker.")
 
     parser.add_argument(
-        "-m",
-        "--model-file",
+        "-s",
+        "--starting-model-path",
         type=Path,
-        default=DEFAULT_MODEL_FILE,
+        default=DEFAULT_STARTING_MODEL_PATH,
         help=(
-            "The path to the model file to train. This model will "
-            "be trained during training and updated. "
-            f"(default: {DEFAULT_MODEL_FILE})"
+            "The path to the starting model to train from. "
+            f"(default: {DEFAULT_STARTING_MODEL_PATH})"
         ),
     )
     parser.add_argument(
         "-o",
-        "--opponent-model-file",
+        "--opponent-model-path",
         type=Path,
-        default=DEFAULT_MODEL_FILE,
+        default=DEFAULT_OPPONENT_MODEL_PATH,
         help=(
             "The path to the opponent model file to train and play "
             "against. This model will be held static during training "
-            f"and evaluation. (default: {DEFAULT_MODEL_FILE})"
+            f"and evaluation. (default: {DEFAULT_OPPONENT_MODEL_PATH})"
+        ),
+    )
+    parser.add_argument(
+        "-m",
+        "--model-dir",
+        type=Path,
+        default=DEFAULT_MODEL_DIR,
+        help=(
+            "The path to save trained models to at the end of "
+            f"each epoch. (default: {DEFAULT_MODEL_DIR})"
         ),
     )
     parser.add_argument(
@@ -79,6 +91,12 @@ def get_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--num-epochs",
+        type=int,
+        default=DEFAULT_NUM_EPOCHS,
+        help=f"The maximum number of epochs to train for. (default: {DEFAULT_NUM_EPOCHS})",
+    )
+    parser.add_argument(
         "-d",
         "--device",
         type=str,
@@ -93,18 +111,19 @@ def load_trainee_player(
     env: gymnasium.Env | VecEnv,
     model_path: str | Path | None = None,
     device: str = "auto",
+    verbose: bool = False,
 ) -> PPOPlayer:
     """Load the model to be trained.
 
     Parameters:
         env: gymnasium.Env | VecEnv
             The environment to train in.
-        layers: List[int]
-            The number of nodes in each layer of the neural network.
         model_path: str | Path | None
             The path to the model file, if not training from scratch.
         device: str
             The device to train on.
+        verbose: bool
+            Whether to print verbose output.
 
     Returns:
         player: BasePlayer
@@ -126,24 +145,26 @@ def load_trainee_player(
     # If we are loading from an existing model file, load the old model
     # and copy the policy weights to the new model
     if model_path is not None and Path(model_path).with_suffix(".zip").exists():
-        print(
-            colored("[load_trainee_player]", color="blue")
-            + f" Starting training from old model at {model_path}"
-        )
+        if verbose:
+            print(
+                colored("[load_trainee_player]", color="blue")
+                + f" Starting training from old model at {model_path}"
+            )
 
         old_model: Final[PPO] = PPO.load(model_path, env=env)
         model.policy.load_state_dict(old_model.policy.state_dict(), strict=True)
     else:
-        print(
-            colored("[load_trainee_player]", color="blue")
-            + " Starting training from scratch"
-        )
+        if verbose:
+            print(
+                colored("[load_trainee_player]", color="blue")
+                + " Starting training from scratch"
+            )
 
     return PPOPlayer(model, "me")
 
 
 def load_opponent_players(
-    model_file: str | Path | None = None, num_opponents: int = 2
+    model_file: str | Path | None = None, num_opponents: int = 2, verbose: bool = False
 ) -> List[PPOPlayer | CallPlayer]:
     """Load opponents.
 
@@ -152,16 +173,18 @@ def load_opponent_players(
             The path to the model file, if not comparing against a Call baseline.
         num_opponents: int
             The number of opponents to load.
+        verbose: bool
+            Whether to print verbose output.
 
     Returns:
-        opponent_players: List[POPlayer | CallPlayer]
+        opponent_players: List[PPOPlayer | CallPlayer]
             The list of opponents.
     """
     opponent_players: List[PPOPlayer | CallPlayer] = []
 
     for i in range(num_opponents):
         opponent_player: PPOPlayer | CallPlayer = load_ppo_player(
-            model_file, f"opponent{i}"
+            model_file, f"opponent{i}", verbose=verbose
         )
         opponent_players.append(opponent_player)
 
@@ -170,28 +193,64 @@ def load_opponent_players(
 
 def main() -> None:
     """Run the script."""
+    #
+    # Process arguments
+    #
     args: Final[argparse.Namespace] = get_args()
 
-    model_path: Final[Path] = args.model_file
-    opponent_path: Final[Path] = args.opponent_model_file
+    starting_model_path: Final[Path] = args.starting_model_path
+    opponent_model_path: Final[Path] = args.opponent_model_path
+    model_dir: Final[Path] = args.model_dir
     num_environments: Final[int] = args.num_environments
     num_timesteps: Final[int] = args.num_timesteps
+    num_epochs: Final[int] = args.num_epochs
     device: Final[str] = get_device() if args.device == "auto" else args.device
 
+    #
+    # Print arguments
+    #
     print(
         colored("------------ gym_env_cnn -------------", color="blue", attrs=["bold"])
     )
-    print(colored(f'{"Model file":<16}: ', color="blue") + f"{model_path}")
-    print(colored(f'{"Opponent file":<16}: ', color="blue") + f"{opponent_path}")
-    print(colored(f'{"Environments":<16}: ', color="blue") + f"{num_environments}")
-    print(colored(f'{"Timesteps":<16}: ', color="blue") + f"{num_timesteps}")
-    print(colored(f'{"Device":<16}: ', color="blue") + f"{device}")
+    print(colored("Models", color="blue", attrs=["bold"]))
+    print(
+        "    "
+        + colored(f'{"Starting model":<14}:', color="blue")
+        + f" {starting_model_path}"
+    )
+    print(
+        "    "
+        + colored(f'{"Opponent model":<14}:', color="blue")
+        + f" {opponent_model_path}"
+    )
+    print("    " + colored(f'{"Output models":<14}:', color="blue") + f" {model_dir}")
+
+    print(colored("Training", color="blue", attrs=["bold"]))
+    print(
+        "    "
+        + colored(f'{"Environments":<14}: ', color="blue")
+        + f"{num_environments}"
+    )
+    print("    " + colored(f'{"Timesteps":<14}: ', color="blue") + f"{num_timesteps}")
+    print("    " + colored(f'{"Epochs":<14}: ', color="blue") + f"{num_epochs}")
+    print("    " + colored(f'{"Device":<14}: ', color="blue") + f"{device}")
     print()
 
+    #
+    # Set up the environments
+    #
+    print(
+        colored(
+            f"Setting up {num_environments} environments...",
+            color="blue",
+            attrs=["bold"],
+        )
+    )
     env = SubprocVecEnv(
         [
             make_env(
-                model_path=model_path,
+                starting_model_path=starting_model_path,
+                opponent_model_path=opponent_model_path,
                 reset_threshold=30000,
                 suits=SHORTER_SUITS,
                 ranks=SHORT_RANKS,
@@ -204,24 +263,47 @@ def main() -> None:
     # Load the trainee player
     #
     trainee_player: Final[PPOPlayer] = load_trainee_player(
-        env, model_path=model_path, device=device
+        env, model_path=starting_model_path, device=device
     )
-    print(trainee_player)
 
     #
     # Load the opponent players
     #
     opponent_players: Final[List[PPOPlayer | CallPlayer]] = load_opponent_players(
-        opponent_path, 2
+        opponent_model_path, 2
     )
-    print(opponent_players)
+
+    #
+    # Print the players
+    #
+    print()
+    print(colored("Players", color="blue", attrs=["bold"]))
+    print(
+        "   "
+        + colored(f"{trainee_player.uuid:<14}: ", color="blue")
+        + f" {trainee_player}"
+        + f" {colored('(trainee)', color='blue')}"
+    )
+    for opponent_i, opponent_player in enumerate(opponent_players):
+        print(
+            "   "
+            + colored(f"{opponent_player.uuid:<14}: ", color="blue")
+            + f" {opponent_player}"
+            + f" {colored('(opponent ' + str(opponent_i + 1) + ')', color='blue')}"
+        )
+    print()
 
     #
     # Train the trainee player
     #
-    num_epochs: int = 0
-    while True:
-        num_epochs += 1
+    for epoch in range(num_epochs):
+        print(
+            colored(
+                f"--------- epoch {epoch:>4} / {num_epochs:>4} ----------",
+                color="blue",
+                attrs=["bold"],
+            )
+        )
 
         #
         # Train the model
@@ -233,17 +315,20 @@ def main() -> None:
         #
         # Save the model
         #
+        epoch_model_path: Path = model_dir / f"epoch_{epoch}"
+        model_dir.mkdir(exist_ok=True, parents=True)
+
         print(
-            colored(f"[epoch {num_epochs:>4}]", color="blue")
-            + f" Saving model to {model_path}..."
+            colored(f"[epoch {epoch:>4}]", color="blue")
+            + f" Saving model to {epoch_model_path}..."
         )
-        trainee_player.model.save(model_path)
+        trainee_player.model.save(epoch_model_path)
 
         #
         # Evaluate the model
         #
         print(colored(f"[epoch {num_epochs:>4}]", "blue") + " Evaluating model...")
-        p1: PPOPlayer | CallPlayer = load_ppo_player(model_path, "me")
+        p1: PPOPlayer | CallPlayer = load_ppo_player(epoch_model_path, "me")
         if not isinstance(p1, PPOPlayer):
             raise ValueError("Player 1 is not a PPOPlayer")
 
