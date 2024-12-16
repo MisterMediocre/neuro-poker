@@ -364,9 +364,19 @@ def make_env(
     return lambda: PokerEnv(
         Game(
             [
-                load_ppo_player(starting_model_path, "me"),
-                load_ppo_player(opponent_model_path, "opponent1"),
-                load_ppo_player(opponent_model_path, "opponent2"),
+                load_ppo_player(
+                    starting_model_path, "me", feature_collector=feature_collector
+                ),
+                load_ppo_player(
+                    opponent_model_path,
+                    "opponent1",
+                    feature_collector=feature_collector,
+                ),
+                load_ppo_player(
+                    opponent_model_path,
+                    "opponent2",
+                    feature_collector=feature_collector,
+                ),
             ],
             get_card_list(suits_, ranks_),
         ),

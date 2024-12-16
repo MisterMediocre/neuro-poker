@@ -33,6 +33,24 @@ CATALOG: Final[Dict[str, PlayerDefinition]] = {
     # "sb5": PlayerDefinition(PPOPlayer, None, Path("models/3p_3s/sb5")),
     "sb6": PlayerDefinition(PPOPlayer, None, Path("models/3p_3s/sb6")),
     "sb_backup": PlayerDefinition(PPOPlayer, None, Path("models/3p_3s/sb_backup")),
+    "sb_linear__1": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap/iteration_1/epoch_10")
+    ),
+    "sb_linear__2": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap/iteration_2/epoch_10")
+    ),
+    "sb_linear__3": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap/iteration_3/epoch_10")
+    ),
+    "sb_linear__4": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap/iteration_4/epoch_10")
+    ),
+    "sb_cnn__1": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap_cnn/iteration_1/epoch_10")
+    ),
+    "sb_cnn__2": PlayerDefinition(
+        PPOPlayer, None, Path("models/3p_3s/sb_bootstrap_cnn/iteration_2/epoch_10")
+    ),
     # NEAT players
     "3p_3s_neat": PlayerDefinition(
         NEATPlayer, NEATModel, Path("models/3p_3s/3p_3s_neat__call__1000g.pkl")

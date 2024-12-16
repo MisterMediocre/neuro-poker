@@ -2,6 +2,8 @@
 
 """Run a catalog of poker games with different players."""
 
+import os
+import sys
 from typing import Final
 
 import numpy as np
@@ -9,6 +11,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
+# Import neuropoker
+sys.path.append(os.getcwd())
 from neuropoker.extra.catalog import compete
 from neuropoker.extra.config import Config
 from neuropoker.game.cards import ALL_RANKS
@@ -60,23 +64,44 @@ def produce_heatmap(actions) -> None:
         grid[x][y] = grid_value
 
     cmap = ListedColormap(["yellow", "red", "blue", "green"])
-    plt.figure(figsize=(13, 9))
-    plt.imshow(grid, cmap=cmap, origin="lower")
-    plt.xticks(range(len(ALL_RANKS)), ALL_RANKS)
-    plt.yticks(range(len(ALL_RANKS)), ALL_RANKS)
-    plt.gca().set_xticks([x - 0.5 for x in range(1, len(ALL_RANKS))], minor=True)
-    plt.gca().set_yticks([y - 0.5 for y in range(1, len(ALL_RANKS))], minor=True)
-    plt.grid(which="minor", color="black", linestyle="-", linewidth=1)
-    plt.xlabel("Same suit below the diagonal")
-    plt.ylabel("Different suit above and including the diagonal")
-    plt.plot(
-        range(len(ALL_RANKS)),
-        range(len(ALL_RANKS)),
+
+    fig, ax = plt.subplots(figsize=(5, 5), dpi=192)
+    ax.imshow(grid, cmap=cmap, origin="lower")
+    ax.set_xticks(range(len(ALL_RANKS)))
+    ax.set_yticks(range(len(ALL_RANKS)))
+    ax.set_xticks([x - 0.5 for x in range(1, len(ALL_RANKS))], minor=True)
+    ax.set_yticks([y - 0.5 for y in range(1, len(ALL_RANKS))], minor=True)
+    ax.set_xticklabels(ALL_RANKS)
+    ax.set_yticklabels(ALL_RANKS)
+    ax.grid(which="minor", color="black", linestyle="-", linewidth=1)
+    ax.set_xlabel("Same suit\n(Below the diagonal)")
+    ax.set_ylabel("Different suit\n(Above and including the diagonal)")
+    ax.plot(
+        [-0.5, len(ALL_RANKS) - 0.5],
+        [-0.5, len(ALL_RANKS) - 0.5],
         color="black",
         linestyle="--",
         linewidth=1,
     )
-    plt.title("Dealer Action Heatmap")
+    # fig.suptitle("Dealer Action Heatmap")
+
+    # plt.figure(figsize=(13, 9))
+    # plt.imshow(grid, cmap=cmap, origin="lower")
+    # plt.xticks(range(len(ALL_RANKS)), ALL_RANKS)
+    # plt.yticks(range(len(ALL_RANKS)), ALL_RANKS)
+    # plt.gca().set_xticks([x - 0.5 for x in range(1, len(ALL_RANKS))], minor=True)
+    # plt.gca().set_yticks([y - 0.5 for y in range(1, len(ALL_RANKS))], minor=True)
+    # plt.grid(which="minor", color="black", linestyle="-", linewidth=1)
+    # plt.xlabel("Same suit below the diagonal")
+    # plt.ylabel("Different suit above and including the diagonal")
+    # plt.plot(
+    #     range(len(ALL_RANKS)),
+    #     range(len(ALL_RANKS)),
+    #     color="black",
+    #     linestyle="--",
+    #     linewidth=1,
+    # )
+    # plt.title("Dealer Action Heatmap")
 
     legend_handles = [
         Patch(facecolor="yellow", edgecolor="black", label="No data"),
@@ -84,13 +109,20 @@ def produce_heatmap(actions) -> None:
         Patch(facecolor="blue", edgecolor="black", label="Call"),
         Patch(facecolor="green", edgecolor="black", label="Raise"),
     ]
-    plt.legend(
+    ax.legend(
         handles=legend_handles,
-        title="Actions",
-        loc="upper right",
-        bbox_to_anchor=(1.2, 1.0),
+        bbox_to_anchor=(0.5, -0.175),
+        # title="Actions",
+        # loc="upper right",
+        loc="upper center",
+        borderaxespad=0.0,
+        frameon=False,
+        ncols=4,
+        # bbox_to_anchor=(1.2, 1.0),
     )
 
+    fig.tight_layout()
+    fig.savefig("plots/ppo-heatmap.png", dpi=192)
     plt.show()
 
 
@@ -100,7 +132,8 @@ def main():
     config: Final[Config] = Config("configs/3p_3s_neat.toml")
 
     # Expect the model to fully exploit the call players
-    players = compete(["sb6", "call", "call"], config, 1000)
+    # players = compete(["sb6", "call", "call"], config, num_games=1000)
+    players = compete(["sb_linear__4", "call", "call"], config, num_games=1000)
 
     produce_heatmap(players[0].dealer_action)
     # produce_heatmap(CATALOG["sb6"].dealer_action)
